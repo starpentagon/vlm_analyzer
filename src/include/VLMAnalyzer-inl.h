@@ -15,15 +15,24 @@ inline constexpr VLMSearchDepth GetVLMDepth(const VLMSearchValue value){
   return kVLMProvedUB - value + 1;
 }
 
-template<PlayerTurn P>
-void VLMAnalyzer::SolveORBruteForce(const VLMSearch &vlm_search, VLMResult * const vlm_result)
+inline constexpr VLMSearchValue GetVLMSearchValue(const VLMSearchDepth depth)
 {
-
+  assert(1 <= depth && depth <= kInBoardMoveNum);
+  return kVLMProvedUB - (depth - 1);
 }
 
 template<PlayerTurn P>
-void VLMAnalyzer::SolveANDBruteForce(const VLMSearch &vlm_search, VLMResult * const vlm_result)
+VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * const vlm_result)
 {
+  assert(vlm_result != nullptr);
+
+  search_manager_.AddNode();
+}
+
+template<PlayerTurn P>
+VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * const vlm_result)
+{
+  assert(vlm_result != nullptr);
 
 }
 

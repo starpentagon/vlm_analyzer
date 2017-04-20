@@ -26,10 +26,20 @@ constexpr bool IsVLMProved(const VLMSearchValue value);
 //! @pre valueは詰む値であること
 constexpr VLMSearchDepth GetVLMDepth(const VLMSearchValue value);
 
+//! @brief 終端局面までの手数から探索結果値を返す
+constexpr VLMSearchValue GetVLMSearchValue(const VLMSearchDepth depth);
+
 //! @brief 探索制御
 typedef struct sturctVLMSearch
 {
-  bool is_detect_dual_solution;   //!< 余詰探索をするかどうかのフラグ
+  sturctVLMSearch()
+  : detect_dual_solution(true), record_search_tree(false), record_proof_tree(true), max_depth(kInBoardMoveNum)
+  {
+  }
+
+  bool detect_dual_solution;   //!< 余詰探索をするかどうかのフラグ
+  bool record_search_tree;     //!< 探索木を記録するかのフラグ
+  bool record_proof_tree;      //!< 証明木を記録するかのフラグ
   VLMSearchDepth max_depth;    //!< 探索最大深さ
 }VLMSearch;
 
@@ -51,19 +61,22 @@ class VLMAnalyzer
 : public Board
 {
 public:
+  //! @pre 対象局面の指し手リストは終端ではない正規手順であること
   VLMAnalyzer(const MoveList &move_list);
 
-  //! @brief 総当り探索で解図を行う
-  void SolveBruteForce(const VLMSearch &vlm_search, VLMResult * const vlm_result);
+  //! @brief 解図を行う
+  void Solve(const VLMSearch &vlm_search, VLMResult * const vlm_result);
 private:
-  
   //! @brief 総当り探索(OR node)
   template<PlayerTurn P>
-  void SolveORBruteForce(const VLMSearch &vlm_search, VLMResult * const vlm_result);
+  VLMSearchValue SolveOR(const VLMSearch &vlm_search, VLMResult * const vlm_result);
 
   //! @brief 総当り探索(AND node)
   template<PlayerTurn P>
-  void SolveANDBruteForce(const VLMSearch &vlm_search, VLMResult * const vlm_result);
+  VLMSearchValue SolveAND(const VLMSearch &vlm_search, VLMResult * const vlm_result);
+
+  //! @brief 終端チェック(OR node)
+  const bool IsTerminate(VLMResult * const vlm_result);
 
   SearchManager search_manager_;    //!< 探索制御
 };

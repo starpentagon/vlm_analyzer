@@ -20,3 +20,15 @@ TEST(VLMAnalyzerTest, GetVLMDepthTest){
     ASSERT_EQ(1, GetVLMDepth(value));
   }
 }
+
+TEST(VLMAnalyzerTest, GetVLMSearchValueTest)
+{
+  {
+    constexpr VLMSearchDepth depth = 1;
+    ASSERT_EQ(kVLMProvedUB, GetVLMSearchValue(depth));
+  }
+  {
+    constexpr VLMSearchDepth depth = 225;
+    ASSERT_EQ(kVLMProvedLB, GetVLMSearchValue(depth));
+  }
+}
