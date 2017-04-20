@@ -11,7 +11,7 @@
 namespace realcore
 {
 
-typedef std::uint8_t VLMSearchDepth;   //!< 探索深さ
+typedef std::int16_t VLMSearchDepth;   //!< 探索深さ
 typedef std::int16_t VLMSearchValue;   //!< 探索結果を表す値
 
 constexpr VLMSearchValue kVLMStrongDisproved = std::numeric_limits<VLMSearchValue>::min();    //!< 強意の不詰(受け側に勝ちがある)
@@ -21,6 +21,9 @@ constexpr VLMSearchValue kVLMProvedUB = kVLMProvedLB + (static_cast<VLMSearchVal
 
 //! @brief 詰む場合の値かどうかを判定する
 constexpr bool IsVLMProved(const VLMSearchValue value);
+
+//! @brief 強意の不詰かどうかを判定する
+constexpr bool IsVLMDisproved(const VLMSearchValue value);
 
 //! @brief 終端局面までの手数を返す
 //! @pre valueは詰む値であること
@@ -33,14 +36,14 @@ constexpr VLMSearchValue GetVLMSearchValue(const VLMSearchDepth depth);
 typedef struct sturctVLMSearch
 {
   sturctVLMSearch()
-  : detect_dual_solution(true), record_search_tree(false), record_proof_tree(true), max_depth(kInBoardMoveNum)
+  : detect_dual_solution(true), record_search_tree(false), record_proof_tree(true), remain_depth(kInBoardMoveNum)
   {
   }
 
   bool detect_dual_solution;   //!< 余詰探索をするかどうかのフラグ
   bool record_search_tree;     //!< 探索木を記録するかのフラグ
   bool record_proof_tree;      //!< 証明木を記録するかのフラグ
-  VLMSearchDepth max_depth;    //!< 探索最大深さ
+  VLMSearchDepth remain_depth;    //!< 探索残り深さ
 }VLMSearch;
 
 //! @brief 解図結果
@@ -57,28 +60,53 @@ typedef struct structVLMResult
   VLMSearchDepth search_depth;     // 探索済の深さ
 }VLMResult;
 
+// 前方宣言
+class VLMAnalyzerTest;
+
 class VLMAnalyzer
 : public Board
 {
+  friend class VLMAnalyzerTest;
+
 public:
   //! @pre 対象局面の指し手リストは終端ではない正規手順であること
   VLMAnalyzer(const MoveList &move_list);
 
   //! @brief 解図を行う
   void Solve(const VLMSearch &vlm_search, VLMResult * const vlm_result);
+
+  //! @brief 指し手を設定する
+  void MakeMove(const MovePosition move);
+
+  //! @brief 指し手を１手戻す
+  void UndoMove();
+
+  //! @brief 探索制御オブジェクトを返す
+  const SearchManager& GetSearchManager() const;
+
 private:
-  //! @brief 総当り探索(OR node)
+  
+  //! @brief OR nodeの探索
   template<PlayerTurn P>
   VLMSearchValue SolveOR(const VLMSearch &vlm_search, VLMResult * const vlm_result);
+  
+  VLMSearchValue SolveOR(const bool is_black_turn, const VLMSearch &vlm_search, VLMResult * const vlm_result);
 
-  //! @brief 総当り探索(AND node)
+  //! @brief AND nodeの探索
   template<PlayerTurn P>
   VLMSearchValue SolveAND(const VLMSearch &vlm_search, VLMResult * const vlm_result);
+
+  //! @brief OR nodeの指し手生成
+  void GetCandidateMoveOR(MoveList * const candidate_move) const;
+
+  //! @brief AND nodeの指し手生成
+  void GetCandidateMoveAND(MoveList * const candidate_move) const;
 
   //! @brief 終端チェック(OR node)
   const bool IsTerminate(VLMResult * const vlm_result);
 
   SearchManager search_manager_;    //!< 探索制御
+  MoveList search_sequence_;        //!< 探索手順
 };
 
 }   // namespace realcore

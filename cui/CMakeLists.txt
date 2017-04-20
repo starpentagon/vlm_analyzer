@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.5.1)
 
 # プロジェクト名
-set(project_name vlm_analyzer_test)
+set(project_name vlm_analyzer)
 project(${project_name} CXX)
 
 # Build Type(Release or Debug)
-set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 
 # ccache
 find_program(CCACHE_FOUND ccache)
@@ -18,12 +19,11 @@ endif(CCACHE_FOUND)
 add_definitions("-Wall -std=c++14")
 
 # インクルードパス
-include_directories(${CMAKE_SOURCE_DIR}/../src/include)
+include_directories(../src/include)
 include_directories(${CMAKE_SOURCE_DIR}/../realcore/src/include)
-include_directories($ENV{GTEST_DIR}/googletest/include)
 
 # ライブラリパス
-link_directories($ENV{GTEST_DIR}/googlemock/gtest)
+link_directories($ENV{BOOST_DIR}/lib)
 
 # ソースファイル
 add_executable(
@@ -36,15 +36,11 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/../realcore/src/BitBoard.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/Board.cc
     ../../src/VLMAnalyzer.cc
-    ../VLMAnalyzerTest.cc
+    ../vlm_analyzer.cc
 )
 
 # ライブラリ
-target_link_libraries(${project_name} gtest)
-target_link_libraries(${project_name} gtest_main)
-
-# Ubuntuでgoogle testをビルドするためにはpthreadが必要
-target_link_libraries(${project_name} pthread)
+target_link_libraries(${project_name} boost_program_options)
 
 if(APPLE OR WIN32)
   target_link_libraries(${project_name} boost_system-mt)
