@@ -19,6 +19,7 @@ int main(int argc, char* argv[])
   option.add_options()
     ("string,s", value<string>(), "開始局面: [a-o]形式のテキスト")
     ("depth,d", value<VLMSearchDepth>()->default_value(7), "探索深さ(default: 7)")
+    ("dual", "余詰を探索する")
     ("help,h", "ヘルプを表示");
   
   variables_map arg_map;
@@ -39,8 +40,10 @@ int main(int argc, char* argv[])
   const auto search_depth = arg_map["depth"].as<VLMSearchDepth>();
 
   VLMAnalyzer vlm_analyzer(board_sequence);
+  
   VLMSearch vlm_search;
   vlm_search.remain_depth = search_depth;
+  vlm_search.detect_dual_solution = arg_map.count("dual");
 
   VLMResult vlm_result;
 
@@ -59,7 +62,9 @@ string VLMResultString(const VLMAnalyzer &vlm_analyzer, const VLMResult &vlm_res
   ss << "Result: ";
 
   if(vlm_result.solved){
-    ss << "Solved";
+    ss << "Solved" << endl;
+    ss << "First Move: " << MoveString(vlm_result.proof_tree.GetTopNodeMove()) << endl;
+    ss << "Proof Tree: " << vlm_result.proof_tree.str();
   }else if(vlm_result.disproved){
     ss << "Disproved";
   }else{

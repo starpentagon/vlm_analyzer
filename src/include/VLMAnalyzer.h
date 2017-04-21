@@ -36,13 +36,11 @@ constexpr VLMSearchValue GetVLMSearchValue(const VLMSearchDepth depth);
 typedef struct sturctVLMSearch
 {
   sturctVLMSearch()
-  : detect_dual_solution(true), record_search_tree(false), record_proof_tree(true), remain_depth(kInBoardMoveNum)
+  : detect_dual_solution(true), remain_depth(kInBoardMoveNum)
   {
   }
 
   bool detect_dual_solution;   //!< 余詰探索をするかどうかのフラグ
-  bool record_search_tree;     //!< 探索木を記録するかのフラグ
-  bool record_proof_tree;      //!< 証明木を記録するかのフラグ
   VLMSearchDepth remain_depth;    //!< 探索残り深さ
 }VLMSearch;
 

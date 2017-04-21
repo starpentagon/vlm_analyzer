@@ -43,11 +43,15 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
 
   if(is_terminate){
     // 終端
-    // todo 証明木、探索木の更新
     const auto depth = search_sequence_.size() + 1;
     const VLMSearchValue value = GetVLMSearchValue(depth);
 
     return value;
+  }
+
+  if(vlm_search.remain_depth == 1){
+    // 残り深さ１で終端していなければ弱意の不詰
+    return kVLMWeakDisproved;
   }
 
   // 候補手生成
@@ -66,8 +70,12 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
     UndoMove();
 
     or_node_value = std::max(or_node_value, and_node_value);
+    
+    if(search_sequence_.empty() && IsVLMProved(and_node_value)){
+      vlm_result->proof_tree.AddChild(move);
+    }
 
-    if(vlm_search.detect_dual_solution && IsVLMProved(and_node_value)){
+    if(!vlm_search.detect_dual_solution && IsVLMProved(and_node_value)){
       break;
     }
   }
@@ -97,7 +105,6 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
 
   if(is_terminate){
     // 終端
-    // todo 証明木、探索木の更新
     return kVLMStrongDisproved;
   }
 
