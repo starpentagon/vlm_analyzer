@@ -46,3 +46,5 @@ callgrind.out.*
 # log files
 *.log
 
+# problem files
+*.csv

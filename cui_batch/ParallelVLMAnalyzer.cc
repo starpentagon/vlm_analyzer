@@ -51,11 +51,20 @@ const bool ParallelVLMAnalyzer::GetProblemIndex(size_t * const problem_index)
 void ParallelVLMAnalyzer::VLMAnalyze(const size_t thread_id, const realcore::VLMSearch &vlm_search)
 {
   const StringVector &board_list = problem_db_.at("Board");
+  const StringVector &id_list = problem_db_.at("ID");
+  const StringVector &name_list = problem_db_.at("Name");
 
   size_t problem_id = 0;
   bool exist_problem = GetProblemIndex(&problem_id);
 
   while(exist_problem){
+    {
+      const auto problem_info = id_list[problem_id] + "_" + name_list[problem_id];
+
+      mutex::scoped_lock lock(mutex_cerr_);
+      cerr << problem_info << endl;
+    }
+
     const auto board_string = board_list[problem_id];
     MoveList board_sequence(board_string);
 
@@ -116,10 +125,12 @@ void ParallelVLMAnalyzer::Output(const size_t problem_id, const realcore::VLMAna
   ss << ",";
 
   // FirstMove
-  ss << MoveString(vlm_result.proof_tree.GetTopNodeMove()) << ",";
+  const string first_move_str = vlm_result.solved ? MoveString(vlm_result.proof_tree.GetTopNodeMove()) : "";
+  ss << first_move_str << ",";
 
   // ProofTree
-  ss << vlm_result.proof_tree.str() << ",";
+  const string proof_tree_str = vlm_result.solved ? vlm_result.proof_tree.str()vlm_result.proof_tree.str() : "";
+  ss << proof_tree_str << ",";
 
   // SearchedDepth
   ss << vlm_result.search_depth << ",";
