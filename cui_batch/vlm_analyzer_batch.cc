@@ -27,6 +27,11 @@ int main(int argc, char* argv[])
   variables_map arg_map;
   store(parse_command_line(argc, argv, option), arg_map);
 
+  if(arg_map.count("header")){
+    ParallelVLMAnalyzer::OutputHeader();
+    return 0;
+  }
+
   bool is_help = arg_map.count("help") || !arg_map.count("problem-db");
 
   if(is_help){
@@ -34,11 +39,6 @@ int main(int argc, char* argv[])
     cout << option;
     cout << "Note: problem-db must have ID, Name, Board column" << endl;
     cout << endl;
-    return 0;
-  }
-
-  if(arg_map.count("header")){
-    ParallelVLMAnalyzer::OutputHeader();
     return 0;
   }
 

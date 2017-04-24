@@ -129,7 +129,7 @@ void ParallelVLMAnalyzer::Output(const size_t problem_id, const realcore::VLMAna
   ss << first_move_str << ",";
 
   // ProofTree
-  const string proof_tree_str = vlm_result.solved ? vlm_result.proof_tree.str()vlm_result.proof_tree.str() : "";
+  const string proof_tree_str = vlm_result.solved ? vlm_result.proof_tree.str() : "";
   ss << proof_tree_str << ",";
 
   // SearchedDepth
