@@ -1,9 +1,16 @@
 #include "VLMAnalyzer.h"
 
+using namespace std;
 using namespace realcore;
 
-VLMAnalyzer::VLMAnalyzer(const MoveList &move_list)
-: Board(move_list), search_manager_(kCatchInterruptException)
+VLMAnalyzer::VLMAnalyzer(const MoveList &board_move_sequence)
+: Board(board_move_sequence), search_manager_(kDefaultNoInterruptionException)
+{
+  vlm_table_ = make_shared<VLMTable>(kDefaultVLMTableSpace, kDefaultVLMTableLockFree);
+}
+
+VLMAnalyzer::VLMAnalyzer(const MoveList &board_move_sequence, const shared_ptr<VLMTable> &vlm_table)
+: Board(board_move_sequence), search_manager_(kCatchInterruptException), vlm_table_(vlm_table)
 {
 }
 
@@ -11,7 +18,7 @@ void VLMAnalyzer::Solve(const VLMSearch &vlm_search, VLMResult * const vlm_resul
 {
   assert(vlm_result != nullptr);
 
-  const bool is_black_turn = move_list_.IsBlackTurn();
+  const bool is_black_turn = board_move_sequence_.IsBlackTurn();
   VLMSearch vlm_search_iterative = vlm_search;
   VLMSearchValue search_value = kVLMStrongDisproved;
 
@@ -77,7 +84,7 @@ void VLMAnalyzer::GetCandidateMoveOR(MoveList * const candidate_move) const
   MoveBitSet forbidden_bit;
   EnumerateForbiddenMoves(&forbidden_bit);
 
-  move_list_.GetOpenMove(forbidden_bit, candidate_move);
+  board_move_sequence_.GetOpenMove(forbidden_bit, candidate_move);
 }
 
 void VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
@@ -97,5 +104,5 @@ void VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
   MoveBitSet forbidden_bit;
   EnumerateForbiddenMoves(&forbidden_bit);
   
-  move_list_.GetPossibleMove(forbidden_bit, candidate_move);
+  board_move_sequence_.GetPossibleMove(forbidden_bit, candidate_move);
 }

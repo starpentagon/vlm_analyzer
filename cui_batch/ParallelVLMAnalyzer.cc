@@ -26,6 +26,13 @@ void ParallelVLMAnalyzer::Run(const size_t thread_num, const realcore::VLMSearch
   assert(thread_num >= 1);
   thread_group thread_group;
 
+  // 置換表を確保する
+  vlm_table_list_.reserve(thread_num);
+  
+  for(size_t i=0; i<thread_num; i++){
+    vlm_table_list_.emplace_back(make_shared<VLMTable>(kDefaultVLMTableSpace, kLockFree));
+  }
+
   for(size_t i=0; i<thread_num; i++){
     thread_group.create_thread(bind(&ParallelVLMAnalyzer::VLMAnalyze, this, i, vlm_search));
   }
@@ -68,14 +75,17 @@ void ParallelVLMAnalyzer::VLMAnalyze(const size_t thread_id, const realcore::VLM
     const auto board_string = board_list[problem_id];
     MoveList board_sequence(board_string);
 
-    if(!IsNormalNonTerminateSequence(board_sequence)){
+    if(!IsNonTerminateNormalSequence(board_sequence)){
       mutex::scoped_lock lock(mutex_cerr_);
       cerr << "The move sequence is not a non-terminal normal sequence: " << board_sequence.str() << endl;
       exist_problem = GetProblemIndex(&problem_id);
       continue;
     }
 
-    VLMAnalyzer vlm_analyzer(board_sequence);
+    const auto &vlm_table = vlm_table_list_[thread_id];
+    vlm_table->Initialize();
+
+    VLMAnalyzer vlm_analyzer(board_sequence, vlm_table);
     VLMResult vlm_result;
 
     vlm_analyzer.Solve(vlm_search, &vlm_result);

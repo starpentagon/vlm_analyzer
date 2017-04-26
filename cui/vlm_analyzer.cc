@@ -37,9 +37,8 @@ int main(int argc, char* argv[])
   const auto board_string = arg_map["string"].as<string>();
   MoveList board_sequence(board_string);
 
-  if(!IsNormalNonTerminateSequence(board_sequence)){
+  if(!IsNonTerminateNormalSequence(board_sequence)){
     cerr << "The move sequence is not a non-terminal normal sequence: " << board_sequence.str() << endl;
-    return -1;
   }
 
   const auto search_depth = arg_map["depth"].as<VLMSearchDepth>();

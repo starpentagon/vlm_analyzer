@@ -1,9 +1,14 @@
 #include "gtest/gtest.h"
 
+#include "VLMTranspositionTable.h"
 #include "VLMAnalyzer.h"
+
+using namespace std;
 
 namespace realcore
 {
+
+shared_ptr<VLMTable> vlm_table = make_shared<VLMTable>(0, kLockFree);
 
 class VLMAnalyzerTest
 : public ::testing::Test
@@ -11,7 +16,7 @@ class VLMAnalyzerTest
 public:
   void MakeMoveUndoTest(){
     MoveList move_list("hh");
-    VLMAnalyzer vlm_analyzer(move_list);
+    VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
     ASSERT_EQ(0, vlm_analyzer.search_sequence_.size());
 
@@ -45,7 +50,7 @@ public:
       // O + --------------------------+ O 
       //   A B C D E F G H I J K L M N O 
       MoveList move_list("hhhgihghjhggkh");
-      VLMAnalyzer vlm_analyzer(move_list);
+      VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
       MoveList candidate_move;
       vlm_analyzer.GetCandidateMoveOR(&candidate_move);
@@ -73,7 +78,7 @@ public:
       // O + --------------------------+ O 
       //   A B C D E F G H I J K L M N O 
       MoveList move_list("hhhgihghjhgg");
-      VLMAnalyzer vlm_analyzer(move_list);
+      VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
       MoveList candidate_move;
       vlm_analyzer.GetCandidateMoveOR(&candidate_move);
@@ -104,7 +109,7 @@ public:
       // O + --------------------------+ O 
       //   A B C D E F G H I J K L M N O 
       MoveList move_list("hhhgihghjhggkh");
-      VLMAnalyzer vlm_analyzer(move_list);
+      VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
       MoveList candidate_move;
       vlm_analyzer.GetCandidateMoveAND(&candidate_move);
@@ -132,7 +137,7 @@ public:
       // O + --------------------------+ O 
       //   A B C D E F G H I J K L M N O 
       MoveList move_list("hhhgihghjhgg");
-      VLMAnalyzer vlm_analyzer(move_list);
+      VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
       MoveList candidate_move;
       vlm_analyzer.GetCandidateMoveAND(&candidate_move);
@@ -156,16 +161,26 @@ TEST_F(VLMAnalyzerTest, GetCandidateMoveANDTest){
 
 TEST_F(VLMAnalyzerTest, IsVLMProvedTest){
   ASSERT_FALSE(IsVLMProved(kVLMStrongDisproved));
-  ASSERT_FALSE(IsVLMProved(kVLMWeakDisproved));
-  ASSERT_TRUE(IsVLMProved(kVLMProvedLB));
-  ASSERT_TRUE(IsVLMProved(kVLMProvedUB));
+  ASSERT_FALSE(IsVLMProved(kVLMWeakDisprovedLB));
+  ASSERT_FALSE(IsVLMProved(kVLMWeakDisprovedUB));
+  ASSERT_TRUE( IsVLMProved(kVLMProvedLB));
+  ASSERT_TRUE( IsVLMProved(kVLMProvedUB));
 }
 
 TEST_F(VLMAnalyzerTest, IsVLMDisprovedTest){
-  ASSERT_TRUE(IsVLMDisproved(kVLMStrongDisproved));
-  ASSERT_FALSE(IsVLMDisproved(kVLMWeakDisproved));
+  ASSERT_TRUE( IsVLMDisproved(kVLMStrongDisproved));
+  ASSERT_FALSE(IsVLMDisproved(kVLMWeakDisprovedLB));
+  ASSERT_FALSE(IsVLMDisproved(kVLMWeakDisprovedUB));
   ASSERT_FALSE(IsVLMDisproved(kVLMProvedLB));
   ASSERT_FALSE(IsVLMDisproved(kVLMProvedUB));
+}
+
+TEST_F(VLMAnalyzerTest, IsVLMWeakDisprovedTest){
+  ASSERT_FALSE(IsVLMWeakDisproved(kVLMStrongDisproved));
+  ASSERT_TRUE( IsVLMWeakDisproved(kVLMWeakDisprovedLB));
+  ASSERT_TRUE( IsVLMWeakDisproved(kVLMWeakDisprovedUB));
+  ASSERT_FALSE(IsVLMWeakDisproved(kVLMProvedLB));
+  ASSERT_FALSE(IsVLMWeakDisproved(kVLMProvedUB));
 }
 
 TEST_F(VLMAnalyzerTest, GetVLMDepthTest){
@@ -174,20 +189,70 @@ TEST_F(VLMAnalyzerTest, GetVLMDepthTest){
     ASSERT_EQ(1, GetVLMDepth(value));
   }
   {
-    constexpr VLMSearchValue value = kVLMProvedUB;
+    constexpr VLMSearchValue value = kVLMProvedLB;
+    ASSERT_EQ(225, GetVLMDepth(value));
+  }
+  {
+    constexpr VLMSearchValue value = kVLMWeakDisprovedUB;
     ASSERT_EQ(1, GetVLMDepth(value));
+  }
+  {
+    constexpr VLMSearchValue value = kVLMWeakDisprovedLB;
+    ASSERT_EQ(225, GetVLMDepth(value));
   }
 }
 
-TEST_F(VLMAnalyzerTest, GetVLMSearchValueTest)
+TEST_F(VLMAnalyzerTest, GetVLMProvedSearchValueTest)
 {
   {
     constexpr VLMSearchDepth depth = 1;
-    ASSERT_EQ(kVLMProvedUB, GetVLMSearchValue(depth));
+    ASSERT_EQ(kVLMProvedUB, GetVLMProvedSearchValue(depth));
   }
   {
     constexpr VLMSearchDepth depth = 225;
-    ASSERT_EQ(kVLMProvedLB, GetVLMSearchValue(depth));
+    ASSERT_EQ(kVLMProvedLB, GetVLMProvedSearchValue(depth));
+  }
+}
+
+TEST_F(VLMAnalyzerTest, GetVLMWeakDisprovedSearchValueTest)
+{
+  {
+    constexpr VLMSearchDepth depth = 1;
+    ASSERT_EQ(kVLMWeakDisprovedUB, GetVLMWeakDisprovedSearchValue(depth));
+  }
+  {
+    constexpr VLMSearchDepth depth = 225;
+    ASSERT_EQ(kVLMWeakDisprovedLB, GetVLMWeakDisprovedSearchValue(depth));
+  }
+}
+
+TEST_F(VLMAnalyzerTest, TranspositionTableTest)
+{
+  constexpr size_t table_space = 1;
+  VLMTable vlm_table(table_space, kLockFree);
+
+  static_assert(kUseExactBoardInfo == 1, "This test assumes kUseExactBoardInfo == 1");
+
+  // Hash値は等しいが盤面情報が異なるケースのテスト
+  constexpr HashValue hash_value = 0;
+  BitBoard bit_board_1, bit_board_2;
+  constexpr VLMSearchValue search_value = 1;
+
+  bit_board_1.SetState<kBlackStone>(kMoveHH);
+  bit_board_2.SetState<kBlackStone>(kMoveHG);
+
+  vlm_table.Upsert(hash_value, bit_board_1, search_value);
+
+  {
+    VLMSearchValue table_value = 0;
+    const auto find_result = vlm_table.find(hash_value, bit_board_1, &table_value);
+    ASSERT_TRUE(find_result);
+    ASSERT_EQ(search_value, table_value);
+  }
+  {
+    VLMSearchValue table_value = 0;
+    const auto find_result = vlm_table.find(hash_value, bit_board_2, &table_value);
+    ASSERT_FALSE(find_result);
   }
 }
 

@@ -29,12 +29,14 @@ link_directories($ENV{GTEST_DIR}/googlemock/gtest)
 add_executable(
     ${project_name}
     ${CMAKE_SOURCE_DIR}/../realcore/src/SearchManager.cc
+    ${CMAKE_SOURCE_DIR}/../realcore/src/Move.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/MoveList.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/LineNeighborhood.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/OpenState.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/BoardOpenState.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/BitBoard.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/Board.cc
+    ../../src/VLMTranspositionTable.cc
     ../../src/VLMAnalyzer.cc
     ../VLMAnalyzerTest.cc
 )

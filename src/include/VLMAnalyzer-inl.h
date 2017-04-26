@@ -14,17 +14,35 @@ inline constexpr bool IsVLMDisproved(const VLMSearchValue value){
   return (value == kVLMStrongDisproved);
 }
 
-inline constexpr VLMSearchDepth GetVLMDepth(const VLMSearchValue value){
-  assert(IsVLMProved(value));
-  // value = kVLMProvedUB - (depth - 1) <=> depth = kVLMProvedUB - value + 1
-  return kVLMProvedUB - value + 1;
+inline constexpr bool IsVLMWeakDisproved(const VLMSearchValue value)
+{
+  return (kVLMWeakDisprovedLB <= value && value <= kVLMWeakDisprovedUB);;
 }
 
-inline constexpr VLMSearchValue GetVLMSearchValue(const VLMSearchDepth depth)
+inline constexpr VLMSearchDepth GetVLMDepth(const VLMSearchValue value){
+  assert(IsVLMProved(value) || IsVLMWeakDisproved(value));
+
+  if(IsVLMProved(value)){
+    // value = kVLMProvedUB - (depth - 1) <=> depth = kVLMProvedUB - value + 1
+    return kVLMProvedUB - value + 1;
+  }else{
+    // value = kVLMWeakDisprovedUB - (depth - 1) <=> depth = kVLMWeakDisprovedUB - value + 1
+    return kVLMWeakDisprovedUB - value + 1;
+  }
+}
+
+inline constexpr VLMSearchValue GetVLMProvedSearchValue(const VLMSearchDepth depth)
 {
   assert(1 <= depth && depth <= kInBoardMoveNum);
   // value = kVLMProvedUB - (depth - 1)
   return kVLMProvedUB - (depth - 1);
+}
+
+inline constexpr VLMSearchValue GetVLMWeakDisprovedSearchValue(const VLMSearchDepth depth)
+{
+  assert(1 <= depth && depth <= kInBoardMoveNum);
+  // value = kVLMWeakDisprovedUB - (depth - 1)
+  return kVLMWeakDisprovedUB - (depth - 1);
 }
 
 template<PlayerTurn P>
@@ -35,23 +53,45 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
   search_manager_.AddNode();
 
   if(search_manager_.IsTerminate()){
-    return kVLMWeakDisproved;
+    return kVLMWeakDisprovedUB;
   }
 
-  MovePosition terminating_move;
-  const bool is_terminate = TerminateCheck<P>(&terminating_move);
+  // 置換表をチェック
+  const auto hash_value = CalcHashValue(board_move_sequence_);
+  VLMSearchValue table_value = 0;
+  const bool is_registered = vlm_table_->find(hash_value, bit_board_, &table_value);
 
-  if(is_terminate){
-    // 終端
-    const auto depth = search_sequence_.size() + 1;
-    const VLMSearchValue value = GetVLMSearchValue(depth);
+  if(is_registered){
+    if(IsVLMProved(table_value) || IsVLMDisproved(table_value)){
+      return table_value;
+    }
 
-    return value;
+    const auto value_depth = GetVLMDepth(table_value);
+    
+    if(value_depth >= vlm_search.remain_depth){
+      return table_value;
+    }
+  }
+
+  if(!is_registered){
+    // 初回訪問時のみ終端チェックを行う
+    MovePosition terminating_move;
+    const bool is_terminate = TerminateCheck<P>(&terminating_move);
+
+    if(is_terminate){
+      // 終端
+      const auto depth = search_sequence_.size() + 1;
+      const VLMSearchValue search_value = GetVLMProvedSearchValue(depth);
+      vlm_table_->Upsert(hash_value, bit_board_, search_value);
+      return search_value;
+    }
   }
 
   if(vlm_search.remain_depth == 1){
     // 残り深さ１で終端していなければ弱意の不詰
-    return kVLMWeakDisproved;
+    const auto search_value = GetVLMWeakDisprovedSearchValue(vlm_search.remain_depth);
+    vlm_table_->Upsert(hash_value, bit_board_, search_value);
+    return search_value;
   }
 
   // 候補手生成
@@ -80,6 +120,8 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
     }
   }
 
+  VLMSearchValue search_value = (IsVLMProved(or_node_value) || IsVLMDisproved(or_node_value)) ? or_node_value : GetVLMWeakDisprovedSearchValue(vlm_search.remain_depth);
+  vlm_table_->Upsert(hash_value, bit_board_, search_value);
   return or_node_value;
 }
 
@@ -91,21 +133,36 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
   search_manager_.AddNode();
 
   if(search_manager_.IsTerminate()){
-    return kVLMWeakDisproved;
+    return kVLMWeakDisprovedUB;
   }
 
-  if(vlm_search.remain_depth == 0){
-    // 指定の深さまでに詰みがなければ弱意の不詰
-    return kVLMWeakDisproved;
+  // 置換表をチェック
+  const auto hash_value = CalcHashValue(board_move_sequence_);
+  VLMSearchValue table_value = 0;
+  const bool is_registered = vlm_table_->find(hash_value, bit_board_, &table_value);
+
+  if(is_registered){
+    if(IsVLMProved(table_value) || IsVLMDisproved(table_value)){
+      return table_value;
+    }
+
+    const auto value_depth = GetVLMDepth(table_value);
+
+    if(value_depth >= vlm_search.remain_depth){
+      return table_value;
+    }
   }
 
-  // 末端でのみ終端チェックを行う
-  MovePosition terminating_move;
-  const bool is_terminate = TerminateCheck<P>(&terminating_move);
+  // 初回訪問時のみ終端チェックを行う
+  if(!is_registered){
+    MovePosition terminating_move;
+    const bool is_terminate = TerminateCheck<P>(&terminating_move);
 
-  if(is_terminate){
-    // 終端
-    return kVLMStrongDisproved;
+    if(is_terminate){
+      // 終端
+      vlm_table_->Upsert(hash_value, bit_board_, kVLMStrongDisproved);
+      return kVLMStrongDisproved;
+    }
   }
 
   // 候補手生成
@@ -130,6 +187,8 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
     }
   }
 
+  VLMSearchValue search_value = (IsVLMProved(and_node_value) || IsVLMDisproved(and_node_value)) ? and_node_value : GetVLMWeakDisprovedSearchValue(vlm_search.remain_depth);
+  vlm_table_->Upsert(hash_value, bit_board_, search_value);
   return and_node_value;
 }
 

@@ -6,6 +6,7 @@
 #include <boost/thread.hpp>
 
 #include "VLMAnalyzer.h"
+#include "VLMTranspositionTable.h"
 #include "CSVReader.h"
 
 class ParallelVLMAnalyzer
@@ -35,6 +36,7 @@ private:
 
   std::deque<size_t> problem_index_list_;    //!< 問題indexのリスト
   std::map<std::string, realcore::StringVector> problem_db_;   //!< VLM問題DB
+  std::vector< std::shared_ptr<realcore::VLMTable> > vlm_table_list_;   //!< 置換表(thread分確保する)
 
   mutable boost::mutex mutex_cout_;   //!< 標準出力のmutex
   mutable boost::mutex mutex_cerr_;   //!< 標準エラー出力のmutex

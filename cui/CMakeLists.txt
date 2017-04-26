@@ -29,6 +29,7 @@ link_directories($ENV{BOOST_DIR}/lib)
 add_executable(
     ${project_name}
     ${CMAKE_SOURCE_DIR}/../realcore/src/SearchManager.cc
+    ${CMAKE_SOURCE_DIR}/../realcore/src/Move.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/MoveList.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/LineNeighborhood.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/OpenState.cc
@@ -36,6 +37,7 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/../realcore/src/BitBoard.cc
     ${CMAKE_SOURCE_DIR}/../realcore/src/Board.cc
     ../../src/VLMAnalyzer.cc
+    ../../src/VLMTranspositionTable.cc
     ../vlm_analyzer.cc
 )
 
