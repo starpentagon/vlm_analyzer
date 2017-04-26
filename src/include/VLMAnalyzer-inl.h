@@ -167,7 +167,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
 
   // 候補手生成
   MoveList candidate_move;
-  GetCandidateMoveAND(&candidate_move);
+  GetCandidateMoveAND<P>(&candidate_move);
 
   // 展開
   VLMSearch child_vlm_search = vlm_search;
@@ -190,6 +190,62 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
   VLMSearchValue search_value = (IsVLMProved(and_node_value) || IsVLMDisproved(and_node_value)) ? and_node_value : GetVLMWeakDisprovedSearchValue(vlm_search.remain_depth);
   vlm_table_->Upsert(hash_value, bit_board_, search_value);
   return and_node_value;
+}
+
+template<PlayerTurn P>
+void VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
+{
+  assert(candidate_move != nullptr);
+  assert(candidate_move->empty());
+
+  MovePosition guard_move;
+  
+  if(IsOpponentFour(&guard_move)){
+    // 相手に四がある
+    *candidate_move = guard_move;
+    return;
+  }
+
+  // 全空点 + Passを生成する
+  MoveBitSet forbidden_bit;
+  EnumerateForbiddenMoves(&forbidden_bit);
+  
+  board_move_sequence_.GetPossibleMove(forbidden_bit, candidate_move);
+
+  MoveOrderingAND<P>(candidate_move);
+}
+
+template<PlayerTurn P>
+void VLMAnalyzer::MoveOrderingAND(MoveList * const candidate_move) const
+{
+  assert(candidate_move != nullptr);
+
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+  MoveBitSet four_move, opponent_four_move;
+
+  EnumerateFourMoves<P>(&four_move);
+  EnumerateFourMoves<Q>(&opponent_four_move);
+  
+  std::vector<MoveValue> move_value;
+  move_value.reserve(candidate_move->size());
+
+  static constexpr std::uint64_t kFourMoveWeight = 1024;    // 四ノビする手の優先度
+  static constexpr std::uint64_t kOpponentFourMoveWeight = kFourMoveWeight - 1;   // 相手の四ノビに先着する手の優先度
+
+  for(const auto move : *candidate_move){
+    if(four_move[move]){
+      move_value.emplace_back(move, kFourMoveWeight);
+    }else if(opponent_four_move[move]){
+      move_value.emplace_back(move, kOpponentFourMoveWeight);
+    }else{
+      const auto last_move = board_move_sequence_.GetLastMove();
+      const auto weight = kMaxBoardDistance - CalcBoardDistance(last_move, move);
+      move_value.emplace_back(move, weight);
+    }
+  }
+
+  DescendingSort(&move_value);
+  *candidate_move = move_value;
 }
 
 inline const SearchManager& VLMAnalyzer::GetSearchManager() const

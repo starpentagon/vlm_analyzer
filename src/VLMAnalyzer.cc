@@ -86,23 +86,3 @@ void VLMAnalyzer::GetCandidateMoveOR(MoveList * const candidate_move) const
 
   board_move_sequence_.GetOpenMove(forbidden_bit, candidate_move);
 }
-
-void VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
-{
-  assert(candidate_move != nullptr);
-  assert(candidate_move->empty());
-
-  MovePosition guard_move;
-  
-  if(IsOpponentFour(&guard_move)){
-    // 相手に四がある
-    *candidate_move = guard_move;
-    return;
-  }
-
-  // 全空点 + Passを生成する
-  MoveBitSet forbidden_bit;
-  EnumerateForbiddenMoves(&forbidden_bit);
-  
-  board_move_sequence_.GetPossibleMove(forbidden_bit, candidate_move);
-}

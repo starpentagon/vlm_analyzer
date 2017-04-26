@@ -111,7 +111,13 @@ private:
   void GetCandidateMoveOR(MoveList * const candidate_move) const;
 
   //! @brief AND nodeの指し手生成
+  template<PlayerTurn P>
   void GetCandidateMoveAND(MoveList * const candidate_move) const;
+
+  //! @brief AND nodeのMoveOrdering
+  //! @pre 相手に四ノビが生じていない
+  template<PlayerTurn P>
+  void MoveOrderingAND(MoveList * const candidate_move) const;
 
   //! @brief 終端チェック(OR node)
   const bool IsTerminate(VLMResult * const vlm_result);
