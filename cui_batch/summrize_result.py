@@ -61,7 +61,7 @@ if __name__ == "__main__":
   result_min = {}
 
   for col in col_list:
-    if "INF" in csv_dict[col]:
+    while "INF" in csv_dict[col]:
       csv_dict[col].remove("INF")
 
     result_data = map(float, csv_dict[col])

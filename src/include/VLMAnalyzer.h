@@ -108,11 +108,17 @@ private:
   VLMSearchValue SolveAND(const VLMSearch &vlm_search, VLMResult * const vlm_result);
 
   //! @brief OR nodeの指し手生成
+  template<PlayerTurn P>
   void GetCandidateMoveOR(MoveList * const candidate_move) const;
 
   //! @brief AND nodeの指し手生成
   template<PlayerTurn P>
   void GetCandidateMoveAND(MoveList * const candidate_move) const;
+
+  //! @brief OR nodeのMoveOrdering
+  //! @pre 相手に四ノビが生じていない
+  template<PlayerTurn P>
+  void MoveOrderingOR(MoveList * const candidate_move) const;
 
   //! @brief AND nodeのMoveOrdering
   //! @pre 相手に四ノビが生じていない

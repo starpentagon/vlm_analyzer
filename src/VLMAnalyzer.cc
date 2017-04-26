@@ -66,23 +66,3 @@ void VLMAnalyzer::UndoMove()
   --search_sequence_;
   Board::UndoMove();
 }
-
-void VLMAnalyzer::GetCandidateMoveOR(MoveList * const candidate_move) const
-{
-  assert(candidate_move != nullptr);
-  assert(candidate_move->empty());
-
-  MovePosition guard_move;
-  
-  if(IsOpponentFour(&guard_move)){
-    // 相手に四がある
-    *candidate_move = guard_move;
-    return;
-  }
-
-  // 全空点を生成する
-  MoveBitSet forbidden_bit;
-  EnumerateForbiddenMoves(&forbidden_bit);
-
-  board_move_sequence_.GetOpenMove(forbidden_bit, candidate_move);
-}

@@ -96,7 +96,7 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
 
   // 候補手生成
   MoveList candidate_move;
-  GetCandidateMoveOR(&candidate_move);
+  GetCandidateMoveOR<P>(&candidate_move);
 
   // 展開
   VLMSearch child_vlm_search = vlm_search;
@@ -193,6 +193,67 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
 }
 
 template<PlayerTurn P>
+void VLMAnalyzer::GetCandidateMoveOR(MoveList * const candidate_move) const
+{
+  assert(candidate_move != nullptr);
+  assert(candidate_move->empty());
+
+  MovePosition guard_move;
+  
+  if(IsOpponentFour(&guard_move)){
+    // 相手に四がある
+    *candidate_move = guard_move;
+    return;
+  }
+
+  // 全空点を生成する
+  MoveBitSet forbidden_bit;
+  EnumerateForbiddenMoves(&forbidden_bit);
+
+  board_move_sequence_.GetOpenMove(forbidden_bit, candidate_move);
+
+  MoveOrderingOR<P>(candidate_move);
+}
+
+template<PlayerTurn P>
+void VLMAnalyzer::MoveOrderingOR(MoveList * const candidate_move) const
+{
+  assert(candidate_move != nullptr);
+
+  MoveBitSet four_move_bit;
+  MoveList four_move_list;
+
+  EnumerateFourMoves<P>(&four_move_bit);
+  GetMoveList(four_move_bit, &four_move_list);
+
+  std::vector<MoveValue> move_value;
+  move_value.reserve(candidate_move->size());
+
+  static constexpr std::int64_t kMultipleCloseFour = 1024; // ３路以内に2つ以上の四ノビ点がある
+  // 相手の四ノビに先着する手の優先度 -> 効果なし
+
+  for(const auto move : *candidate_move){
+    size_t close_four_count = 0;
+    
+    for(const auto four_move : four_move_list){
+      const auto distance = CalcBoardDistance(move, four_move);
+      close_four_count += distance <= 3;
+    }
+    
+    if(close_four_count >= 2){
+      move_value.emplace_back(move, kMultipleCloseFour);
+    }else{
+      const auto last_move = board_move_sequence_.GetLastMove();
+      const auto weight = kMaxBoardDistance - CalcBoardDistance(last_move, move);
+      move_value.emplace_back(move, weight);
+    }
+  }
+
+  DescendingSort(&move_value);
+  *candidate_move = move_value;
+}
+
+template<PlayerTurn P>
 void VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
 {
   assert(candidate_move != nullptr);
@@ -221,21 +282,21 @@ void VLMAnalyzer::MoveOrderingAND(MoveList * const candidate_move) const
   assert(candidate_move != nullptr);
 
   constexpr PlayerTurn Q = GetOpponentTurn(P);
-  MoveBitSet four_move, opponent_four_move;
+  MoveBitSet four_move_bit, opponent_four_move_bit;
 
-  EnumerateFourMoves<P>(&four_move);
-  EnumerateFourMoves<Q>(&opponent_four_move);
+  EnumerateFourMoves<P>(&four_move_bit);
+  EnumerateFourMoves<Q>(&opponent_four_move_bit);
   
   std::vector<MoveValue> move_value;
   move_value.reserve(candidate_move->size());
 
-  static constexpr std::uint64_t kFourMoveWeight = 1024;    // 四ノビする手の優先度
-  static constexpr std::uint64_t kOpponentFourMoveWeight = kFourMoveWeight - 1;   // 相手の四ノビに先着する手の優先度
+  static constexpr std::int64_t kFourMoveWeight = 1024;    // 四ノビする手の優先度
+  static constexpr std::int64_t kOpponentFourMoveWeight = kFourMoveWeight - 1;   // 相手の四ノビに先着する手の優先度
 
   for(const auto move : *candidate_move){
-    if(four_move[move]){
+    if(four_move_bit[move]){
       move_value.emplace_back(move, kFourMoveWeight);
-    }else if(opponent_four_move[move]){
+    }else if(opponent_four_move_bit[move]){
       move_value.emplace_back(move, kOpponentFourMoveWeight);
     }else{
       const auto last_move = board_move_sequence_.GetLastMove();
