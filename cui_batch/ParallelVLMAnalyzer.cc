@@ -77,9 +77,7 @@ void ParallelVLMAnalyzer::VLMAnalyze(const size_t thread_id, const realcore::VLM
 
     if(!IsNonTerminateNormalSequence(board_sequence)){
       mutex::scoped_lock lock(mutex_cerr_);
-      cerr << "The move sequence is not a non-terminal normal sequence: " << board_sequence.str() << endl;
-      exist_problem = GetProblemIndex(&problem_id);
-      continue;
+      cerr << "The move sequence is not a non-terminal normal sequence. The result may not be accurate. : " << board_sequence.str() << endl;
     }
 
     const auto &vlm_table = vlm_table_list_[thread_id];

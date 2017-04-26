@@ -8,7 +8,7 @@ if __name__ == "__main__":
   argc = len(argvs)
 
   if(argc != 2):
-    print 'Usage %s (result csv file)' % argv[0]
+    print 'Usage %s (result csv file)' % argvs[0]
     quit()
   
   # data load
