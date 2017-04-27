@@ -44,6 +44,10 @@ void VLMAnalyzer::Solve(const VLMSearch &vlm_search, VLMResult * const vlm_resul
   if(search_manager_.IsTerminate() && vlm_result->search_depth >= 3){
     vlm_result->search_depth -= 2;
   }
+
+  if(vlm_result->solved){
+    GetProofTree(&vlm_result->proof_tree);
+  }
 }
 
 VLMSearchValue VLMAnalyzer::SolveOR(const bool is_black_turn, const VLMSearch &vlm_search, VLMResult * const vlm_result)
@@ -65,4 +69,23 @@ void VLMAnalyzer::UndoMove()
 {
   --search_sequence_;
   Board::UndoMove();
+}
+
+const bool VLMAnalyzer::GetProofTree(MoveTree * const proof_tree)
+{
+  assert(proof_tree != nullptr);
+  assert(proof_tree->empty());
+
+  const bool is_black_turn = board_move_sequence_.IsBlackTurn();
+  const bool is_generated = false;
+
+  if(is_black_turn){
+    return GetProofTreeOR<kBlackTurn>(proof_tree);
+  }else{
+    return GetProofTreeOR<kWhiteTurn>(proof_tree);
+  }
+
+  if(!is_generated){
+    proof_tree->clear();
+  }
 }

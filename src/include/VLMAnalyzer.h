@@ -92,6 +92,9 @@ public:
   //! @brief 指し手を１手戻す
   void UndoMove();
 
+  //! @brief 現局面をroot nodeとする証明木を取得する
+  const bool GetProofTree(MoveTree * const proof_tree);
+
   //! @brief 探索制御オブジェクトを返す
   const SearchManager& GetSearchManager() const;
 
@@ -124,6 +127,14 @@ private:
   //! @pre 相手に四ノビが生じていない
   template<PlayerTurn P>
   void MoveOrderingAND(MoveList * const candidate_move) const;
+
+  //! @brief 証明木の取得(OR node)
+  template<PlayerTurn P>
+  const bool GetProofTreeOR(MoveTree * const proof_tree);
+
+  //! @brief 証明木の取得(AND node)
+  template<PlayerTurn P>
+  const bool GetProofTreeAND(MoveTree * const proof_tree);
 
   //! @brief 終端チェック(OR node)
   const bool IsTerminate(VLMResult * const vlm_result);

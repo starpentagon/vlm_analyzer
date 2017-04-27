@@ -111,10 +111,6 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
 
     or_node_value = std::max(or_node_value, and_node_value);
     
-    if(search_sequence_.empty() && IsVLMProved(and_node_value)){
-      vlm_result->proof_tree.AddChild(move);
-    }
-
     if(!vlm_search.detect_dual_solution && IsVLMProved(and_node_value)){
       break;
     }
@@ -314,6 +310,95 @@ inline const SearchManager& VLMAnalyzer::GetSearchManager() const
   return search_manager_;
 }
 
+template<PlayerTurn P>
+const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
+{
+  assert(proof_tree != nullptr);
+  
+  MoveList candidate_move;
+  GetCandidateMoveOR<P>(&candidate_move);
+
+  const auto hash_value = CalcHashValue(board_move_sequence_);
+  const bool is_black_turn = P == kBlackTurn;
+  BitBoard child_bit_board = bit_board_;
+  constexpr PositionState S = GetPlayerStone(P);
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+  bool is_proof_tree_generated = false;
+
+  // いずれかの候補手で詰みが登録されているかチェックする
+  for(const auto move : candidate_move){
+    // ほとんどの候補手は詰まないのでBitBoard, Hash値の更新のみで置換表をチェックする
+    const auto child_hash_value = CalcHashValue(is_black_turn, move, hash_value); // OR nodeはPassがないため差分計算する
+    child_bit_board.SetState<S>(move);
+
+    VLMSearchValue search_value;
+    const auto is_find = vlm_table_->find(child_hash_value, child_bit_board, &search_value);
+
+    child_bit_board.SetState<kOpenPosition>(move);
+
+    if(!is_find){
+      continue;
+    }
+
+    if(!IsVLMProved(search_value)){
+      continue;
+    }
+
+    // move: 登録済の詰む手
+    proof_tree->AddChild(move);
+    proof_tree->MoveChildNode(move);
+    MakeMove(move);
+
+    const auto is_child_generated = GetProofTreeAND<Q>(proof_tree);
+
+    UndoMove();
+    proof_tree->MoveParent();
+
+    is_proof_tree_generated |= is_child_generated;
+  }
+
+  return is_proof_tree_generated;
+}
+
+template<PlayerTurn P>
+const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
+{
+  assert(proof_tree != nullptr);
+  
+  MoveList candidate_move;
+  GetCandidateMoveAND<P>(&candidate_move);
+
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+
+  // すべての候補手の詰みが登録されているかチェックする
+  for(const auto move : candidate_move){
+    // すべての候補手が登録済であることが期待されるのでBitBoardのみの更新ではなくMakeMove, Undoで更新する
+    MakeMove(move);
+    const auto child_hash_value = CalcHashValue(board_move_sequence_); // AND nodeはPassがあるため逐次計算する
+
+    VLMSearchValue search_value;
+    const auto is_find = vlm_table_->find(child_hash_value, bit_board_, &search_value);
+    bool is_child_generated = false;
+    
+    if(is_find && IsVLMProved(search_value)){
+      proof_tree->AddChild(move);
+      proof_tree->MoveChildNode(move);
+  
+      is_child_generated = GetProofTreeOR<Q>(proof_tree);
+  
+      proof_tree->MoveParent();
+    }
+
+    UndoMove();
+
+    if(!is_child_generated){
+      // いずれかの候補手で証明木が生成できなければ生成失敗
+      return false;
+    }
+  }
+
+  return true;
+}
 }   // namespace realcore
 
 #endif    // VLM_ANALYZER_INL_H
