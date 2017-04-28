@@ -67,6 +67,7 @@ string VLMResultString(const VLMAnalyzer &vlm_analyzer, const VLMResult &vlm_res
 
   if(vlm_result.solved){
     ss << "Solved" << endl;
+
     ss << "First Move: " << MoveString(vlm_result.proof_tree.GetTopNodeMove()) << endl;
     ss << "Proof Tree: " << vlm_result.proof_tree.str();
   }else if(vlm_result.disproved){

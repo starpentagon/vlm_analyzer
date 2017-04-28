@@ -5,8 +5,8 @@ set(project_name vlm_analyzer)
 project(${project_name} CXX)
 
 # Build Type(Release or Debug)
-#set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Release)
 
 # ccache
 find_program(CCACHE_FOUND ccache)

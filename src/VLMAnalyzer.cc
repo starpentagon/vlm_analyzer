@@ -77,15 +77,17 @@ const bool VLMAnalyzer::GetProofTree(MoveTree * const proof_tree)
   assert(proof_tree->empty());
 
   const bool is_black_turn = board_move_sequence_.IsBlackTurn();
-  const bool is_generated = false;
+  bool is_generated = false;
 
   if(is_black_turn){
-    return GetProofTreeOR<kBlackTurn>(proof_tree);
+    is_generated = GetProofTreeOR<kBlackTurn>(proof_tree);
   }else{
-    return GetProofTreeOR<kWhiteTurn>(proof_tree);
+    is_generated = GetProofTreeOR<kWhiteTurn>(proof_tree);
   }
 
   if(!is_generated){
     proof_tree->clear();
   }
+
+  return is_generated;
 }

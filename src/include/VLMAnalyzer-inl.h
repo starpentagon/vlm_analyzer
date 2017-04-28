@@ -80,8 +80,8 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
 
     if(is_terminate){
       // 終端
-      const auto depth = search_sequence_.size() + 1;
-      const VLMSearchValue search_value = GetVLMProvedSearchValue(depth);
+      constexpr VLMSearchDepth depth = 1;
+      constexpr VLMSearchValue search_value = GetVLMProvedSearchValue(depth);
       vlm_table_->Upsert(hash_value, bit_board_, search_value);
       return search_value;
     }
@@ -321,6 +321,28 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
   const auto hash_value = CalcHashValue(board_move_sequence_);
   const bool is_black_turn = P == kBlackTurn;
   BitBoard child_bit_board = bit_board_;
+
+  VLMSearchValue search_value;
+  
+  if(!vlm_table_->find(hash_value, bit_board_, &search_value) || !IsVLMProved(search_value))
+  {
+    return false;
+  }
+
+  const auto depth = GetVLMDepth(search_value);
+
+  if(depth == 1){
+    // 末端チェック
+    MovePosition terminating_move;
+    const bool is_terminate = TerminateCheck<P>(&terminating_move);
+
+    if(is_terminate){
+      // 終端
+      proof_tree->AddChild(terminating_move);
+      return true;
+    }
+  }
+
   constexpr PositionState S = GetPlayerStone(P);
   constexpr PlayerTurn Q = GetOpponentTurn(P);
   bool is_proof_tree_generated = false;
@@ -331,8 +353,8 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
     const auto child_hash_value = CalcHashValue(is_black_turn, move, hash_value); // OR nodeはPassがないため差分計算する
     child_bit_board.SetState<S>(move);
 
-    VLMSearchValue search_value;
-    const auto is_find = vlm_table_->find(child_hash_value, child_bit_board, &search_value);
+    VLMSearchValue child_search_value;
+    const auto is_find = vlm_table_->find(child_hash_value, child_bit_board, &child_search_value);
 
     child_bit_board.SetState<kOpenPosition>(move);
 
@@ -340,7 +362,7 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
       continue;
     }
 
-    if(!IsVLMProved(search_value)){
+    if(!IsVLMProved(child_search_value)){
       continue;
     }
 

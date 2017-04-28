@@ -139,6 +139,9 @@ private:
   //! @brief 終端チェック(OR node)
   const bool IsTerminate(VLMResult * const vlm_result);
 
+  //! @brief 子局面の探索結果値から現局面の探索結果値を算出する
+  const VLMSearchValue GetSearchValue(const VLMSearchValue child_search_value) const;
+
   SearchManager search_manager_;    //!< 探索制御
   MoveList search_sequence_;        //!< 探索手順
   std::shared_ptr<VLMTable> vlm_table_;   //!< 置換表
