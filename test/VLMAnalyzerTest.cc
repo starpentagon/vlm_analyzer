@@ -53,7 +53,7 @@ public:
       VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
       MoveList candidate_move;
-      vlm_analyzer.GetCandidateMoveOR(&candidate_move);
+      vlm_analyzer.GetCandidateMoveOR<kWhiteTurn>(&candidate_move);
 
       ASSERT_EQ(1, candidate_move.size());
       ASSERT_EQ(kMoveLH, candidate_move[0]);
@@ -81,7 +81,7 @@ public:
       VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
       MoveList candidate_move;
-      vlm_analyzer.GetCandidateMoveOR(&candidate_move);
+      vlm_analyzer.GetCandidateMoveOR<kBlackTurn>(&candidate_move);
 
       ASSERT_EQ(219, candidate_move.size());
     }
@@ -112,7 +112,7 @@ public:
       VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
       MoveList candidate_move;
-      vlm_analyzer.GetCandidateMoveAND(&candidate_move);
+      vlm_analyzer.GetCandidateMoveAND<kWhiteTurn>(&candidate_move);
 
       ASSERT_EQ(1, candidate_move.size());
       ASSERT_EQ(kMoveLH, candidate_move[0]);
@@ -140,10 +140,19 @@ public:
       VLMAnalyzer vlm_analyzer(move_list, vlm_table);
 
       MoveList candidate_move;
-      vlm_analyzer.GetCandidateMoveAND(&candidate_move);
+      vlm_analyzer.GetCandidateMoveAND<kBlackTurn>(&candidate_move);
 
       ASSERT_EQ(219 + 1, candidate_move.size());    // Passを含む
     }
+  }
+
+  void GetSearchValueTest(){
+    MoveList move_list("hhhgihghjhgg");
+    VLMAnalyzer vlm_analyzer(move_list, vlm_table);
+
+    ASSERT_EQ(kVLMStrongDisproved, vlm_analyzer.GetSearchValue(kVLMStrongDisproved));
+    ASSERT_EQ(kVLMWeakDisprovedUB - 1, vlm_analyzer.GetSearchValue(kVLMWeakDisprovedUB));
+    ASSERT_EQ(kVLMProvedUB - 1, vlm_analyzer.GetSearchValue(kVLMProvedUB));
   }
 };
 
@@ -256,4 +265,8 @@ TEST_F(VLMAnalyzerTest, TranspositionTableTest)
   }
 }
 
+TEST_F(VLMAnalyzerTest, GetSearchValueTest)
+{
+  GetSearchValueTest();
+}  
 }

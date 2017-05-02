@@ -45,6 +45,8 @@ int main(int argc, char* argv[])
 
   VLMAnalyzer vlm_analyzer(board_sequence);
   
+  cerr << vlm_analyzer.GetSettingInfo() << endl;
+
   VLMSearch vlm_search;
   vlm_search.remain_depth = search_depth;
   vlm_search.detect_dual_solution = arg_map.count("dual");
@@ -86,6 +88,20 @@ string VLMResultString(const VLMAnalyzer &vlm_analyzer, const VLMResult &vlm_res
   // 探索ノード数
   const auto node_count = search_manager.GetNode();
   ss << "Nodes: " << node_count << endl;
+
+  // 証明木
+  const auto proof_tree_count = search_manager.GetProofTreeCount();
+  const auto proof_tree_success_count = search_manager.GetProofTreeSuccessCount();
+  const double proof_tree_success_rate = proof_tree_count == 0 ? 0.0 : round(1000.0 * proof_tree_success_count / proof_tree_count) / 10;
+
+  ss << "ProofTree: " << proof_tree_success_count << " / " << proof_tree_count << " (" << proof_tree_success_rate << " %)" << endl;
+
+  // Simulation
+  const auto simulation_count = search_manager.GetSimulationCount();
+  const auto simulation_success_count = search_manager.GetSimulationSuccessCount();
+  const double simulation_success_rate = simulation_count == 0 ? 0.0 : round(1000.0 * simulation_success_count / simulation_count) / 10;
+
+  ss << "Simulation: " << simulation_success_count << " / " << simulation_count << " (" << simulation_success_rate << " %)" << endl;
 
   // 探索時間
   const auto search_time = search_manager.GetSearchTime();

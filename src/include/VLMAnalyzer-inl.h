@@ -76,7 +76,7 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
   if(!is_registered){
     // 初回訪問時のみ終端チェックを行う
     MovePosition terminating_move;
-    const bool is_terminate = TerminateCheck<P>(&terminating_move);
+    const bool is_terminate = TerminateCheck(&terminating_move);
 
     if(is_terminate){
       // 終端
@@ -89,7 +89,8 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
 
   if(vlm_search.remain_depth == 1){
     // 残り深さ１で終端していなければ弱意の不詰
-    const auto search_value = GetVLMWeakDisprovedSearchValue(vlm_search.remain_depth);
+    constexpr VLMSearchDepth depth = 1;
+    constexpr auto search_value = GetVLMWeakDisprovedSearchValue(depth);
     vlm_table_->Upsert(hash_value, bit_board_, search_value);
     return search_value;
   }
@@ -116,9 +117,9 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
     }
   }
 
-  VLMSearchValue search_value = (IsVLMProved(or_node_value) || IsVLMDisproved(or_node_value)) ? or_node_value : GetVLMWeakDisprovedSearchValue(vlm_search.remain_depth);
+  const VLMSearchValue search_value = GetSearchValue(or_node_value);
   vlm_table_->Upsert(hash_value, bit_board_, search_value);
-  return or_node_value;
+  return search_value;
 }
 
 template<PlayerTurn P>
@@ -152,7 +153,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
   // 初回訪問時のみ終端チェックを行う
   if(!is_registered){
     MovePosition terminating_move;
-    const bool is_terminate = TerminateCheck<P>(&terminating_move);
+    const bool is_terminate = TerminateCheck(&terminating_move);
 
     if(is_terminate){
       // 終端
@@ -163,17 +164,40 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
 
   // 候補手生成
   MoveList candidate_move;
-  GetCandidateMoveAND<P>(&candidate_move);
+  const auto is_terminate_guard = GetCandidateMoveAND<P>(&candidate_move);
+
+  if(vlm_search.remain_depth == 2 && !is_terminate_guard){
+    // 残り深さ２で相手に１手勝ちがない -> Passすると弱意の不詰になる
+    static constexpr VLMSearchDepth depth = 2;
+    constexpr VLMSearchValue search_value = GetVLMWeakDisprovedSearchValue(depth);
+
+    vlm_table_->Upsert(hash_value, bit_board_, search_value);
+    return search_value;
+  }
 
   // 展開
   VLMSearch child_vlm_search = vlm_search;
   child_vlm_search.remain_depth--;
   constexpr PlayerTurn Q = GetOpponentTurn(P);
   VLMSearchValue and_node_value = kVLMProvedUB;
+  MoveTree proof_tree;
 
   for(const auto move : candidate_move){
     MakeMove(move);
-    VLMSearchValue or_node_value = SolveOR<Q>(child_vlm_search, vlm_result);
+    
+    VLMSearchValue or_node_value = kVLMStrongDisproved;
+
+    if(!proof_tree.empty()){
+      // 証明木が存在する場合はSimulationを行う
+      or_node_value = SimulationOR<Q>(child_vlm_search, &proof_tree);
+      search_manager_.AddSimulationResult(IsVLMProved(or_node_value));
+    }
+
+    if(!IsVLMProved(or_node_value)){
+      // Simulationをしなかった or 失敗した場合は通常探索を行う
+      or_node_value = SolveOR<Q>(child_vlm_search, vlm_result);
+    }
+
     UndoMove();
 
     and_node_value = std::min(and_node_value, or_node_value);
@@ -183,9 +207,9 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
     }
   }
 
-  VLMSearchValue search_value = (IsVLMProved(and_node_value) || IsVLMDisproved(and_node_value)) ? and_node_value : GetVLMWeakDisprovedSearchValue(vlm_search.remain_depth);
+  const VLMSearchValue search_value = GetSearchValue(and_node_value);
   vlm_table_->Upsert(hash_value, bit_board_, search_value);
-  return and_node_value;
+  return search_value;
 }
 
 template<PlayerTurn P>
@@ -226,7 +250,6 @@ void VLMAnalyzer::MoveOrderingOR(MoveList * const candidate_move) const
   move_value.reserve(candidate_move->size());
 
   static constexpr std::int64_t kMultipleCloseFour = 1024; // ３路以内に2つ以上の四ノビ点がある
-  // 相手の四ノビに先着する手の優先度 -> 効果なし
 
   for(const auto move : *candidate_move){
     size_t close_four_count = 0;
@@ -250,7 +273,7 @@ void VLMAnalyzer::MoveOrderingOR(MoveList * const candidate_move) const
 }
 
 template<PlayerTurn P>
-void VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
+bool VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
 {
   assert(candidate_move != nullptr);
   assert(candidate_move->empty());
@@ -260,16 +283,25 @@ void VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
   if(IsOpponentFour(&guard_move)){
     // 相手に四がある
     *candidate_move = guard_move;
-    return;
+    return true;
   }
 
-  // 全空点 + Passを生成する
+  MoveBitSet guard_move_bit;
+  const bool terminate_threat = GetTerminateGuard(&guard_move_bit);
   MoveBitSet forbidden_bit;
   EnumerateForbiddenMoves(&forbidden_bit);
   
-  board_move_sequence_.GetPossibleMove(forbidden_bit, candidate_move);
+  if(terminate_threat)
+  {
+    guard_move_bit &= ~forbidden_bit;
+    GetMoveList(guard_move_bit, candidate_move);
+  }else{
+    // 全空点 + Passを生成する
+    board_move_sequence_.GetPossibleMove(forbidden_bit, candidate_move);
+  }
 
   MoveOrderingAND<P>(candidate_move);
+  return terminate_threat;
 }
 
 template<PlayerTurn P>
@@ -334,7 +366,7 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
   if(depth == 1){
     // 末端チェック
     MovePosition terminating_move;
-    const bool is_terminate = TerminateCheck<P>(&terminating_move);
+    const bool is_terminate = TerminateCheck(&terminating_move);
 
     if(is_terminate){
       // 終端
@@ -420,6 +452,194 @@ const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
   }
 
   return true;
+}
+
+template<PlayerTurn P>
+VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree * const proof_tree)
+{
+  assert(proof_tree != nullptr);
+
+  search_manager_.AddNode();
+
+  if(search_manager_.IsTerminate()){
+    return kVLMWeakDisprovedUB;
+  }
+
+  // 置換表をチェック
+  const auto hash_value = CalcHashValue(board_move_sequence_);
+  VLMSearchValue table_value = 0;
+  const bool is_registered = vlm_table_->find(hash_value, bit_board_, &table_value);
+
+  if(is_registered){
+    if(IsVLMProved(table_value) || IsVLMDisproved(table_value)){
+      return table_value;
+    }
+
+    const auto value_depth = GetVLMDepth(table_value);
+    
+    if(value_depth >= vlm_search.remain_depth){
+      return table_value;
+    }
+  }
+
+  if(!is_registered){
+    // 初回訪問時のみ終端チェックを行う
+    MovePosition terminating_move;
+    const bool is_terminate = TerminateCheck(&terminating_move);
+
+    if(is_terminate){
+      // 終端
+      constexpr VLMSearchDepth depth = 1;
+      constexpr VLMSearchValue search_value = GetVLMProvedSearchValue(depth);
+      vlm_table_->Upsert(hash_value, bit_board_, search_value);
+      return search_value;
+    }
+  }
+
+  if(vlm_search.remain_depth == 1){
+    // 残り深さ１で終端していなければ弱意の不詰
+    constexpr VLMSearchDepth depth = 1;
+    constexpr auto search_value = GetVLMWeakDisprovedSearchValue(depth);
+    vlm_table_->Upsert(hash_value, bit_board_, search_value);
+    return search_value;
+  }
+
+  // 候補手生成
+  MoveList candidate_move;
+  GetCandidateMoveOR<P>(&candidate_move);
+
+  // 展開
+  VLMSearch child_vlm_search = vlm_search;
+  child_vlm_search.remain_depth--;
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+  VLMSearchValue or_node_value = kVLMWeakDisprovedLB;   // 展開する手を証明木の手に制限するので詰まなくても弱意の不詰
+
+  for(const auto move : candidate_move){
+    // 証明木に存在する手のみ展開する
+    if(!proof_tree->MoveChildNode(move)){
+      continue;
+    }
+
+    MakeMove(move);
+    VLMSearchValue and_node_value = SimulationAND<Q>(child_vlm_search, proof_tree);
+    UndoMove();
+    proof_tree->MoveParent();
+
+    or_node_value = std::max(or_node_value, and_node_value);
+    
+    if(!vlm_search.detect_dual_solution && IsVLMProved(and_node_value)){
+      break;
+    }
+  }
+
+  const VLMSearchValue search_value = GetSearchValue(or_node_value);
+
+  if(IsVLMProved(search_value)){
+    // Simulaitonでは確定値のみ登録する
+    vlm_table_->Upsert(hash_value, bit_board_, search_value);
+  }
+
+  return search_value;
+}
+
+template<PlayerTurn P>
+VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree * const proof_tree)
+{
+  assert(proof_tree != nullptr);
+
+  search_manager_.AddNode();
+
+  if(search_manager_.IsTerminate()){
+    return kVLMWeakDisprovedUB;
+  }
+
+  // 置換表をチェック
+  const auto hash_value = CalcHashValue(board_move_sequence_);
+  VLMSearchValue table_value = 0;
+  const bool is_registered = vlm_table_->find(hash_value, bit_board_, &table_value);
+
+  if(is_registered){
+    if(IsVLMProved(table_value) || IsVLMDisproved(table_value)){
+      return table_value;
+    }
+
+    const auto value_depth = GetVLMDepth(table_value);
+
+    if(value_depth >= vlm_search.remain_depth){
+      return table_value;
+    }
+  }
+
+  // 初回訪問時のみ終端チェックを行う
+  if(!is_registered){
+    MovePosition terminating_move;
+    const bool is_terminate = TerminateCheck(&terminating_move);
+
+    if(is_terminate){
+      // 終端
+      vlm_table_->Upsert(hash_value, bit_board_, kVLMStrongDisproved);
+      return kVLMStrongDisproved;
+    }
+  }
+
+  // 候補手生成
+  MoveList candidate_move;
+  GetCandidateMoveAND<P>(&candidate_move);
+
+  // 候補手がすべて証明木に登録されているかチェックする
+  MoveList proof_tree_move;
+  proof_tree->GetChildMoveList(&proof_tree_move);
+
+  MoveBitSet proof_tree_move_bit;
+
+  for(const auto move : proof_tree_move){
+    proof_tree_move_bit.set(move);
+  }
+
+  for(const auto move : candidate_move){
+    if(!proof_tree_move_bit[move]){
+      // 候補手が登録されていない場合はSimulation失敗
+      return kVLMWeakDisprovedUB;
+    }
+  }
+
+  // 展開
+  VLMSearch child_vlm_search = vlm_search;
+  child_vlm_search.remain_depth--;
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+  VLMSearchValue and_node_value = kVLMProvedUB;
+
+  for(const auto move : candidate_move){
+    proof_tree->MoveChildNode(move);
+    MakeMove(move);
+    VLMSearchValue or_node_value = SimulationOR<Q>(child_vlm_search, proof_tree);
+    UndoMove();
+    proof_tree->MoveParent();
+
+    and_node_value = std::min(and_node_value, or_node_value);
+
+    if(!IsVLMProved(or_node_value)){
+      break;
+    }
+  }
+
+  const VLMSearchValue search_value = GetSearchValue(and_node_value);
+
+  if(IsVLMProved(search_value)){
+    // Simulationでは確定値のみ登録する
+    vlm_table_->Upsert(hash_value, bit_board_, search_value);
+  }
+
+  return search_value;
+}
+
+inline const VLMSearchValue VLMAnalyzer::GetSearchValue(const VLMSearchValue child_search_value) const
+{
+  if(IsVLMDisproved(child_search_value)){
+    return kVLMStrongDisproved;
+  }
+
+  return child_search_value - 1;
 }
 }   // namespace realcore
 

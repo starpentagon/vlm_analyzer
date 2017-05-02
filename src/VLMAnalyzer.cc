@@ -91,3 +91,21 @@ const bool VLMAnalyzer::GetProofTree(MoveTree * const proof_tree)
 
   return is_generated;
 }
+
+const std::string VLMAnalyzer::GetSettingInfo() const
+{
+  stringstream ss;
+  
+  // Build mode
+  ss << "Build:";
+
+  #ifdef NDEBUG
+    ss << "Release" << endl;
+  #else
+    ss << "Debug" << endl;
+  #endif
+
+  // 置換表の定義情報
+  ss << vlm_table_->GetDefinitionInfo();
+  return ss.str();
+}

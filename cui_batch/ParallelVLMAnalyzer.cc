@@ -33,6 +33,11 @@ void ParallelVLMAnalyzer::Run(const size_t thread_num, const realcore::VLMSearch
     vlm_table_list_.emplace_back(make_shared<VLMTable>(kDefaultVLMTableSpace, kLockFree));
   }
 
+  // VLM Analyzerの設定を出力
+  const auto &vlm_table = vlm_table_list_[0];
+  VLMAnalyzer vlm_analyzer(MoveList(), vlm_table);
+  cerr << vlm_analyzer.GetSettingInfo() << endl;
+
   for(size_t i=0; i<thread_num; i++){
     thread_group.create_thread(bind(&ParallelVLMAnalyzer::VLMAnalyze, this, i, vlm_search));
   }

@@ -98,6 +98,9 @@ public:
   //! @brief 探索制御オブジェクトを返す
   const SearchManager& GetSearchManager() const;
 
+  //! @brief パラメタ設定情報を返す
+  const std::string GetSettingInfo() const;
+
 private:
   
   //! @brief OR nodeの探索
@@ -115,8 +118,9 @@ private:
   void GetCandidateMoveOR(MoveList * const candidate_move) const;
 
   //! @brief AND nodeの指し手生成
+  //! @retval true 相手に四ノビ or １手勝ちが発生, false 相手に四ノビ and １手勝ちがない
   template<PlayerTurn P>
-  void GetCandidateMoveAND(MoveList * const candidate_move) const;
+  bool GetCandidateMoveAND(MoveList * const candidate_move) const;
 
   //! @brief OR nodeのMoveOrdering
   //! @pre 相手に四ノビが生じていない
@@ -135,6 +139,14 @@ private:
   //! @brief 証明木の取得(AND node)
   template<PlayerTurn P>
   const bool GetProofTreeAND(MoveTree * const proof_tree);
+
+  //! @brief 証明木によるSimulation(OR node)
+  template<PlayerTurn P>
+  VLMSearchValue SimulationOR(const VLMSearch &vlm_search, MoveTree * const proof_tree);
+
+  //! @brief 証明木によるSimulation(AND node)
+  template<PlayerTurn P>
+  VLMSearchValue SimulationAND(const VLMSearch &vlm_search, MoveTree * const proof_tree);
 
   //! @brief 終端チェック(OR node)
   const bool IsTerminate(VLMResult * const vlm_result);
