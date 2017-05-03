@@ -190,12 +190,19 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
     if(!proof_tree.empty()){
       // 証明木が存在する場合はSimulationを行う
       or_node_value = SimulationOR<Q>(child_vlm_search, &proof_tree);
+//      std::cerr << "sim: " << board_move_sequence_.str() << " ," << proof_tree.str() << " ," << IsVLMProved(or_node_value) << std::endl;
       search_manager_.AddSimulationResult(IsVLMProved(or_node_value));
     }
 
     if(!IsVLMProved(or_node_value)){
       // Simulationをしなかった or 失敗した場合は通常探索を行う
       or_node_value = SolveOR<Q>(child_vlm_search, vlm_result);
+      
+      if(IsVLMProved(or_node_value) && GetVLMDepth(or_node_value) >= 3){
+        const auto is_generated = GetProofTree(&proof_tree);
+        search_manager_.AddGetProofTreeResult(is_generated);
+//        std::cerr << "prf: " << board_move_sequence_.str() << " ," << proof_tree.str() << " dep: " << GetVLMDepth(or_node_value) << std::endl;
+      }
     }
 
     UndoMove();
@@ -295,6 +302,11 @@ bool VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
   {
     guard_move_bit &= ~forbidden_bit;
     GetMoveList(guard_move_bit, candidate_move);
+
+    if(candidate_move->empty()){
+      // OR nodeで終端するように防手がない場合はPassをする
+      *candidate_move += kNullMove;
+    }
   }else{
     // 全空点 + Passを生成する
     board_move_sequence_.GetPossibleMove(forbidden_bit, candidate_move);
@@ -399,6 +411,14 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
     }
 
     // move: 登録済の詰む手
+    const bool is_already_child = proof_tree->MoveChildNode(move);
+
+    if(is_already_child){
+      // すでに証明木に登録済
+      proof_tree->MoveParent();
+      continue;
+    }
+
     proof_tree->AddChild(move);
     proof_tree->MoveChildNode(move);
     MakeMove(move);
