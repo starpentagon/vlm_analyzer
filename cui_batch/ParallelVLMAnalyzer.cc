@@ -30,7 +30,7 @@ void ParallelVLMAnalyzer::Run(const size_t thread_num, const realcore::VLMSearch
   vlm_table_list_.reserve(thread_num);
   
   for(size_t i=0; i<thread_num; i++){
-    vlm_table_list_.emplace_back(make_shared<VLMTable>(kDefaultVLMTableSpace, kLockFree));
+    vlm_table_list_.emplace_back(std::make_shared<VLMTable>(kDefaultVLMTableSpace, kLockFree));
   }
 
   // VLM Analyzerの設定を出力
@@ -47,7 +47,7 @@ void ParallelVLMAnalyzer::Run(const size_t thread_num, const realcore::VLMSearch
 
 const bool ParallelVLMAnalyzer::GetProblemIndex(size_t * const problem_index)
 {
-  mutex::scoped_lock lock(mutex_problem_index_list_);
+  boost::mutex::scoped_lock lock(mutex_problem_index_list_);
   assert(problem_index != nullptr);
 
   if(problem_index_list_.empty()){
@@ -73,7 +73,7 @@ void ParallelVLMAnalyzer::VLMAnalyze(const size_t thread_id, const realcore::VLM
     {
       const auto problem_info = id_list[problem_id] + "_" + name_list[problem_id];
 
-      mutex::scoped_lock lock(mutex_cerr_);
+      boost::mutex::scoped_lock lock(mutex_cerr_);
       cerr << problem_info << endl;
     }
 
@@ -81,7 +81,7 @@ void ParallelVLMAnalyzer::VLMAnalyze(const size_t thread_id, const realcore::VLM
     MoveList board_sequence(board_string);
 
     if(!IsNonTerminateNormalSequence(board_sequence)){
-      mutex::scoped_lock lock(mutex_cerr_);
+      boost::mutex::scoped_lock lock(mutex_cerr_);
       cerr << "The move sequence is not a non-terminal normal sequence. The result may not be accurate. : " << board_sequence.str() << endl;
     }
 
@@ -165,6 +165,6 @@ void ParallelVLMAnalyzer::Output(const size_t problem_id, const realcore::VLMAna
     ss << "INF";
   }
 
-  mutex::scoped_lock lock(mutex_cout_);
+  boost::mutex::scoped_lock lock(mutex_cout_);
   cout << ss.str() << endl;
 }

@@ -129,8 +129,10 @@ private:
 
   //! @brief AND nodeのMoveOrdering
   //! @pre 相手に四ノビが生じていない
+  //! @param candidate_move_bit 候補手の位置
+  //! @param ソート済の指し手リストの格納先
   template<PlayerTurn P>
-  void MoveOrderingAND(MoveList * const candidate_move) const;
+  void MoveOrderingAND(MoveBitSet * const candidate_move_bit, MoveList * const candidate_move) const;
 
   //! @brief 証明木の取得(OR node)
   template<PlayerTurn P>
