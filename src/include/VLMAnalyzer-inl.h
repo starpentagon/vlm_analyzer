@@ -376,6 +376,15 @@ void VLMAnalyzer::MoveOrderingAND(MoveBitSet * const candidate_move_bit, MoveLis
     GetMoveList(semi_three_move_bit, candidate_move);
     *candidate_move_bit ^= semi_three_move_bit;
   }
+  {
+    // 優先度5: 剣先点を作る手
+/*    MoveBitSet point_of_sword_move_bit;
+    EnumeratePointOfSwordMoves<P>(&point_of_sword_move_bit);
+    point_of_sword_move_bit &= *candidate_move_bit;
+
+    GetMoveList(point_of_sword_move_bit, candidate_move);
+    *candidate_move_bit ^= point_of_sword_move_bit;
+*/  }
 
   GetMoveList(*candidate_move_bit, candidate_move);
 }
