@@ -4,13 +4,15 @@ using namespace std;
 using namespace realcore;
 
 VLMAnalyzer::VLMAnalyzer(const MoveList &board_move_sequence)
-: Board(board_move_sequence), search_manager_(kDefaultNoInterruptionException)
+: Board(board_move_sequence, board_move_sequence.IsBlackTurn() ? kUpdateVLMAnalyzerBlack : kUpdateVLMAnalyzerWhite), 
+  search_manager_(kDefaultNoInterruptionException)
 {
   vlm_table_ = make_shared<VLMTable>(kDefaultVLMTableSpace, kDefaultVLMTableLockFree);
 }
 
 VLMAnalyzer::VLMAnalyzer(const MoveList &board_move_sequence, const shared_ptr<VLMTable> &vlm_table)
-: Board(board_move_sequence), search_manager_(kCatchInterruptException), vlm_table_(vlm_table)
+: Board(board_move_sequence, board_move_sequence.IsBlackTurn() ? kUpdateVLMAnalyzerBlack : kUpdateVLMAnalyzerWhite), 
+  search_manager_(kCatchInterruptException), vlm_table_(vlm_table)
 {
 }
 

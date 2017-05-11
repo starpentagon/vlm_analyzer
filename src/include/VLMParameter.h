@@ -8,6 +8,8 @@
 
 #include <cstdint>
 
+#include "OpenState.h"
+
 namespace realcore{
 
 //! @brief 置換表に盤面情報をすべて用いるかどうかのフラグ
@@ -24,6 +26,14 @@ static constexpr bool kDefaultVLMTableLockFree = false;
 //! @brief 置換表ではデフォルトではInterruption ExceptionをCatchしない
 static constexpr bool kDefaultNoInterruptionException = false;
 
+// VLM Analyzer用(黒)の空点情報の更新: 禁手チェック用 + AND nodeでの終端チェック(四ノビ点)
+//constexpr UpdateOpenStateFlag kUpdateVLMAnalyzerBlack(0b000111011);    
+constexpr UpdateOpenStateFlag kUpdateVLMAnalyzerBlack(0b001111011);    // 三を作る手用
+//constexpr UpdateOpenStateFlag kUpdateVLMAnalyzerBlack(0b100111011);    // 剣先を作る手用
+
+// VLM Analyzer用(白)の空点情報の更新: 禁手チェック用 + OR nodeでの自分(白番)の終端チェック + AND nodeでの相手(白番)の終端手防手生成(達四点)
+constexpr UpdateOpenStateFlag kUpdateVLMAnalyzerWhite(0b000111111);    
+//constexpr UpdateOpenStateFlag kUpdateVLMAnalyzerWhite(0b010111111);    // 剣先を作る手用
 }   // namespace realcore
 
 #endif    // VLM_PARAMETER_H

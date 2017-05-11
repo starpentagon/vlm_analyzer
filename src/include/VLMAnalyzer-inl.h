@@ -106,11 +106,8 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
   child_vlm_search.remain_depth--;
   constexpr PlayerTurn Q = GetOpponentTurn(P);
   VLMSearchValue or_node_value = kVLMStrongDisproved;
-  int order = 0;
-  static std::array<int, 225> order_hist{{0}};
 
   for(const auto move : candidate_move){
-    order++;
     MakeMove(move);
     VLMSearchValue and_node_value = SolveAND<Q>(child_vlm_search, vlm_result);
     UndoMove();
@@ -121,18 +118,6 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
       break;
     }
   }
-
-  order_hist[order]++;
-  const auto count = std::accumulate(order_hist.begin(), order_hist.end(), 0);
-
-  if(count % 1000 == 0){
-/*    std::cerr << "OR:" << std::endl;
-    for(size_t i=1; i<5; i++){
-      std::cerr << i << "\t" << order_hist[i] << std::endl;
-    }
-
-    std::cerr << "total: " << count << std::endl << std::endl;
-*/  }
 
   const VLMSearchValue search_value = GetSearchValue(or_node_value);
   vlm_table_->Upsert(hash_value, bit_board_, search_value);
@@ -340,35 +325,9 @@ void VLMAnalyzer::MoveOrderingAND(MoveBitSet * const candidate_move_bit, MoveLis
 
   constexpr PlayerTurn Q = GetOpponentTurn(P);
 
+  // @see doc/02_performance/vlm_analyzer_performance.xlsx, MoveOrderingAND sheet
   {
-    // 優先度1: 四ノビする手
-    MoveBitSet four_move_bit;
-    EnumerateFourMoves<P>(&four_move_bit);
-    four_move_bit &= *candidate_move_bit;
-
-    GetMoveList(four_move_bit, candidate_move);
-    *candidate_move_bit ^= four_move_bit;
-  }
-  {
-    // 優先度2: 相手の達四点に先着する手
-    MoveBitSet opponent_open_four_move_bit;
-    EnumerateOpenFourMoves<Q>(&opponent_open_four_move_bit);
-    opponent_open_four_move_bit &= *candidate_move_bit;
-
-    GetMoveList(opponent_open_four_move_bit, candidate_move);
-    *candidate_move_bit ^= opponent_open_four_move_bit;
-  }
-  {
-    // 優先度3: 相手の四ノビ点に先着する手
-    MoveBitSet opponent_four_move_bit;
-    EnumerateFourMoves<Q>(&opponent_four_move_bit);
-    opponent_four_move_bit &= *candidate_move_bit;
-
-    GetMoveList(opponent_four_move_bit, candidate_move);
-    *candidate_move_bit ^= opponent_four_move_bit;
-  }
-  {
-    // 優先度4: 三を作る手
+    // 優先度1: 三を作る手
     MoveBitSet semi_three_move_bit;
     EnumerateSemiThreeMoves<P>(&semi_three_move_bit);
     semi_three_move_bit &= *candidate_move_bit;
@@ -377,14 +336,14 @@ void VLMAnalyzer::MoveOrderingAND(MoveBitSet * const candidate_move_bit, MoveLis
     *candidate_move_bit ^= semi_three_move_bit;
   }
   {
-    // 優先度5: 剣先点を作る手
-/*    MoveBitSet point_of_sword_move_bit;
-    EnumeratePointOfSwordMoves<P>(&point_of_sword_move_bit);
-    point_of_sword_move_bit &= *candidate_move_bit;
+    // 優先度2: 相手の四ノビ点に先着する手
+    MoveBitSet opponent_four_move_bit;
+    EnumerateFourMoves<Q>(&opponent_four_move_bit);
+    opponent_four_move_bit &= *candidate_move_bit;
 
-    GetMoveList(point_of_sword_move_bit, candidate_move);
-    *candidate_move_bit ^= point_of_sword_move_bit;
-*/  }
+    GetMoveList(opponent_four_move_bit, candidate_move);
+    *candidate_move_bit ^= opponent_four_move_bit;
+  }
 
   GetMoveList(*candidate_move_bit, candidate_move);
 }
