@@ -67,10 +67,222 @@ void VLMAnalyzer::MakeMove(const MovePosition move)
   Board::MakeMove(move);
 }
 
+void VLMAnalyzer::MakeMove(const VLMSearch &child_vlm_search, const MovePosition move)
+{
+  search_sequence_ += move;
+  Board::MakeMove(move);
+
+  if(child_vlm_search.remain_depth == kShallowDepth){
+    auto &board_open_state = board_open_state_list_.back();
+    const UpdateOpenStateFlag update_flag_shallow = board_open_state.GetUpdateOpenStateFlag() == kUpdateVLMAnalyzerBlack ? kUpdateVLMAnalyzerShallowBlack : kUpdateVLMAnalyzerShallowWhite;
+    board_open_state.SetUpdateOpenStateFlag(update_flag_shallow);
+  }
+}
+
 void VLMAnalyzer::UndoMove()
 {
   --search_sequence_;
   Board::UndoMove();
+}
+
+template<>
+void VLMAnalyzer::MoveOrderingOR<kBlackTurn>(const VLMSearch &vlm_search, MoveBitSet * const candidate_move_bit, MoveList * const candidate_move) const
+{
+  assert(candidate_move != nullptr);
+  assert(candidate_move->empty());
+
+  constexpr PlayerTurn P = kBlackTurn;
+
+  MoveBitSet four_bit, three_bit;
+  EnumerateFourMoves<P>(&four_bit);
+  EnumerateSemiThreeMoves<P>(&three_bit);
+
+  MoveBitSet mise_bit, multi_mise_bit;
+
+  // @see doc/02_performance/vlm_analyzer_performance.pptx, 「OR nodeの指し手」
+  if(vlm_search.remain_depth >= 3){
+    // 残り深さ３以上
+    // 四三を作る手を優先する
+    MoveBitSet four_three_bit(four_bit & three_bit);
+    four_three_bit &= *candidate_move_bit;
+
+    GetMoveList(four_three_bit, candidate_move);
+    *candidate_move_bit ^= four_three_bit;
+  }
+  
+  if(vlm_search.remain_depth >= 5){
+    // 残り深さ5以上
+    // (四 or 三) & ミセ手
+    EnumerateMiseMoves<P>(&mise_bit, &multi_mise_bit);
+
+    {
+      MoveBitSet threat_mise_bit((four_bit | three_bit) & mise_bit);
+      threat_mise_bit &= *candidate_move_bit;
+
+      GetMoveList(threat_mise_bit, candidate_move);
+      *candidate_move_bit ^= threat_mise_bit;
+    }
+
+    // 両ミセ
+    {
+      multi_mise_bit &= *candidate_move_bit;
+
+      GetMoveList(multi_mise_bit, candidate_move);
+      *candidate_move_bit ^= multi_mise_bit;
+    }
+  }
+
+  // 剣先
+  if(vlm_search.remain_depth >= 5){
+    MoveBitSet point_of_sword_bit;
+    EnumeratePointOfSwordMoves<P>(&point_of_sword_bit);
+    point_of_sword_bit &= *candidate_move_bit;
+
+    GetMoveList(point_of_sword_bit, candidate_move);
+    *candidate_move_bit ^= point_of_sword_bit;
+  }
+
+  // 二
+  if(vlm_search.remain_depth >= 5){
+    MoveBitSet two_bit;
+    EnumerateTwoMoves<P>(&two_bit);
+    two_bit &= *candidate_move_bit;
+
+    GetMoveList(two_bit, candidate_move);
+    *candidate_move_bit ^= two_bit;
+  }
+
+  // 四
+  four_bit &= *candidate_move_bit;
+
+  GetMoveList(four_bit, candidate_move);
+  *candidate_move_bit ^= four_bit;
+
+  // 三
+  three_bit &= *candidate_move_bit;
+
+  GetMoveList(three_bit, candidate_move);
+  *candidate_move_bit ^= three_bit;
+
+  // 残りの手をすべて生成
+  GetMoveList(*candidate_move_bit, candidate_move);
+
+  return;
+}
+
+template<>
+void VLMAnalyzer::MoveOrderingOR<kWhiteTurn>(const VLMSearch &vlm_search, MoveBitSet * const candidate_move_bit, MoveList * const candidate_move) const
+{
+  assert(candidate_move != nullptr);
+  assert(candidate_move->empty());
+
+  constexpr PlayerTurn P = kWhiteTurn;
+
+  MoveBitSet four_bit, three_bit;
+  EnumerateFourMoves<P>(&four_bit);
+  EnumerateSemiThreeMoves<P>(&three_bit);
+
+  MoveBitSet point_of_sword_bit;
+  EnumeratePointOfSwordMoves<P>(&point_of_sword_bit);
+
+  MoveBitSet mise_bit, multi_mise_bit;
+
+  // @see doc/02_performance/vlm_analyzer_performance.pptx, 「OR nodeの指し手」
+  if(vlm_search.remain_depth >= 3){
+    // 残り深さ３以上
+    // 四三, 三々, (三 or 四) & 剣先点(四々ミセ、極め手ミセの代替)を優先する
+    {
+      // 四三
+      MoveBitSet four_three_move_bit(four_bit & three_bit);
+      four_three_move_bit &= *candidate_move_bit;
+
+      GetMoveList(four_three_move_bit, candidate_move);
+      *candidate_move_bit ^= four_three_move_bit;
+    }
+    {
+      // 三々
+      MoveBitSet double_three_bit;
+      EnumerateDoubleSemiThreeMoves<P>(&double_three_bit);
+      double_three_bit &= *candidate_move_bit;
+
+      GetMoveList(double_three_bit, candidate_move);
+      *candidate_move_bit ^= double_three_bit;
+    }
+    {
+      // (三 or 四) & 剣先点(四々ミセ、極め手ミセの代替)
+      MoveBitSet threat_sword_move_bit((four_bit | three_bit) & point_of_sword_bit);
+      threat_sword_move_bit &= *candidate_move_bit;
+
+      GetMoveList(threat_sword_move_bit, candidate_move);
+      *candidate_move_bit ^= threat_sword_move_bit;
+    }
+  }
+  
+  if(vlm_search.remain_depth >= 5){
+    // 残り深さ5以上
+    // (四 or 三) & ミセ手
+    EnumerateMiseMoves<P>(&mise_bit, &multi_mise_bit);
+
+    {
+      MoveBitSet threat_mise_bit((four_bit | three_bit) & mise_bit);
+      threat_mise_bit &= *candidate_move_bit;
+
+      GetMoveList(threat_mise_bit, candidate_move);
+      *candidate_move_bit ^= threat_mise_bit;
+    }
+
+    // 両ミセ
+    {
+      multi_mise_bit &= *candidate_move_bit;
+
+      GetMoveList(multi_mise_bit, candidate_move);
+      *candidate_move_bit ^= multi_mise_bit;
+    }
+    
+    // ミセ手 & 剣先点(四々ミセ、極め手ミセの代替)
+    {
+      MoveBitSet threat_sword_move_bit(mise_bit & point_of_sword_bit);
+      threat_sword_move_bit &= *candidate_move_bit;
+
+      GetMoveList(threat_sword_move_bit, candidate_move);
+      *candidate_move_bit ^= threat_sword_move_bit;
+    }
+  }
+
+  // 剣先
+  if(vlm_search.remain_depth >= 5){
+    point_of_sword_bit &= *candidate_move_bit;
+
+    GetMoveList(point_of_sword_bit, candidate_move);
+    *candidate_move_bit ^= point_of_sword_bit;
+  }
+
+  // 二ノビ
+  if(vlm_search.remain_depth >= 5){
+    MoveBitSet two_bit;
+    EnumerateTwoMoves<P>(&two_bit);
+    two_bit &= *candidate_move_bit;
+
+    GetMoveList(two_bit, candidate_move);
+    *candidate_move_bit ^= two_bit;
+  }
+
+  // 四
+  four_bit &= *candidate_move_bit;
+
+  GetMoveList(four_bit, candidate_move);
+  *candidate_move_bit ^= four_bit;
+
+  // 三
+  three_bit &= *candidate_move_bit;
+
+  GetMoveList(three_bit, candidate_move);
+  *candidate_move_bit ^= three_bit;
+
+  // 残りの手をすべて生成
+  GetMoveList(*candidate_move_bit, candidate_move);
+
+  return;
 }
 
 const bool VLMAnalyzer::GetProofTree(MoveTree * const proof_tree)

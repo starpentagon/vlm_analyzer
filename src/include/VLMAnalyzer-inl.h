@@ -99,7 +99,7 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
 
   // 候補手生成
   MoveList candidate_move;
-  GetCandidateMoveOR<P>(&candidate_move);
+  GetCandidateMoveOR<P>(vlm_search, &candidate_move);
 
   // 展開
   VLMSearch child_vlm_search = vlm_search;
@@ -108,7 +108,7 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
   VLMSearchValue or_node_value = kVLMStrongDisproved;
 
   for(const auto move : candidate_move){
-    MakeMove(move);
+    MakeMove(child_vlm_search, move);
     VLMSearchValue and_node_value = SolveAND<Q>(child_vlm_search, vlm_result);
     UndoMove();
 
@@ -166,7 +166,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
 
   // 候補手生成
   MoveList candidate_move;
-  const auto is_terminate_guard = GetCandidateMoveAND<P>(&candidate_move);
+  const auto is_terminate_guard = GetCandidateMoveAND<P>(vlm_search, &candidate_move);
 
   if(vlm_search.remain_depth == 2 && !is_terminate_guard){
     // 残り深さ２で相手に１手勝ちがない -> Passすると弱意の不詰になる
@@ -185,12 +185,15 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
   MoveTree proof_tree;
 
   for(const auto move : candidate_move){
-    MakeMove(move);
+    MakeMove(child_vlm_search, move);
     
     VLMSearchValue or_node_value = kVLMStrongDisproved;
 
     if(!proof_tree.empty()){
       // 証明木が存在する場合はSimulationを行う
+      VLMSearch vlm_simulation = vlm_search;
+      vlm_simulation.is_search = false;
+      
       or_node_value = SimulationOR<Q>(child_vlm_search, &proof_tree);
 //      std::cerr << "sim: " << board_move_sequence_.str() << " ," << proof_tree.str() << " ," << IsVLMProved(or_node_value) << std::endl;
       search_manager_.AddSimulationResult(IsVLMProved(or_node_value));
@@ -222,7 +225,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
 }
 
 template<PlayerTurn P>
-void VLMAnalyzer::GetCandidateMoveOR(MoveList * const candidate_move) const
+void VLMAnalyzer::GetCandidateMoveOR(const VLMSearch &vlm_search, MoveList * const candidate_move) const
 {
   assert(candidate_move != nullptr);
   assert(candidate_move->empty());
@@ -236,53 +239,20 @@ void VLMAnalyzer::GetCandidateMoveOR(MoveList * const candidate_move) const
   }
 
   // 全空点を生成する
-  MoveBitSet forbidden_bit;
+  MoveBitSet forbidden_bit, candidate_move_bit;
   EnumerateForbiddenMoves(&forbidden_bit);
 
-  board_move_sequence_.GetOpenMove(forbidden_bit, candidate_move);
+  board_move_sequence_.GetOpenMove(forbidden_bit, &candidate_move_bit);
 
-  MoveOrderingOR<P>(candidate_move);
-}
-
-template<PlayerTurn P>
-void VLMAnalyzer::MoveOrderingOR(MoveList * const candidate_move) const
-{
-  assert(candidate_move != nullptr);
-
-  MoveBitSet four_move_bit;
-  MoveList four_move_list;
-
-  EnumerateFourMoves<P>(&four_move_bit);
-  GetMoveList(four_move_bit, &four_move_list);
-
-  std::vector<MoveValue> move_value;
-  move_value.reserve(candidate_move->size());
-
-  static constexpr std::int64_t kMultipleCloseFour = 1024; // ３路以内に2つ以上の四ノビ点がある
-
-  for(const auto move : *candidate_move){
-    size_t close_four_count = 0;
-    
-    for(const auto four_move : four_move_list){
-      const auto distance = CalcBoardDistance(move, four_move);
-      close_four_count += distance <= 3;
-    }
-    
-    if(close_four_count >= 2){
-      move_value.emplace_back(move, kMultipleCloseFour);
-    }else{
-      const auto last_move = board_move_sequence_.GetLastMove();
-      const auto weight = kMaxBoardDistance - CalcBoardDistance(last_move, move);
-      move_value.emplace_back(move, weight);
-    }
+  if(vlm_search.is_search){
+    MoveOrderingOR<P>(vlm_search, &candidate_move_bit, candidate_move);
+  }else{
+    GetMoveList(candidate_move_bit, candidate_move);
   }
-
-  DescendingSort(&move_value);
-  *candidate_move = move_value;
 }
 
 template<PlayerTurn P>
-bool VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
+bool VLMAnalyzer::GetCandidateMoveAND(const VLMSearch &vlm_search, MoveList * const candidate_move) const
 {
   assert(candidate_move != nullptr);
   assert(candidate_move->empty());
@@ -313,7 +283,12 @@ bool VLMAnalyzer::GetCandidateMoveAND(MoveList * const candidate_move) const
     board_move_sequence_.GetPossibleMove(forbidden_bit, &guard_move_bit);
   }
 
-  MoveOrderingAND<P>(&guard_move_bit, candidate_move);
+  if(vlm_search.is_search){
+    MoveOrderingAND<P>(&guard_move_bit, candidate_move);
+  }else{
+    GetMoveList(guard_move_bit, candidate_move);
+  }
+
   return terminate_threat;
 }
 
@@ -359,7 +334,11 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
   assert(proof_tree != nullptr);
   
   MoveList candidate_move;
-  GetCandidateMoveOR<P>(&candidate_move);
+  VLMSearch vlm_search;
+  vlm_search.is_search = false;
+  vlm_search.remain_depth = 225;
+
+  GetCandidateMoveOR<P>(vlm_search, &candidate_move);
 
   const auto hash_value = CalcHashValue(board_move_sequence_);
   const bool is_black_turn = P == kBlackTurn;
@@ -437,9 +416,13 @@ template<PlayerTurn P>
 const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
 {
   assert(proof_tree != nullptr);
+
+  VLMSearch vlm_search;
+  vlm_search.is_search = false;
+  vlm_search.remain_depth = 225;
   
   MoveList candidate_move;
-  GetCandidateMoveAND<P>(&candidate_move);
+  GetCandidateMoveAND<P>(vlm_search, &candidate_move);
 
   constexpr PlayerTurn Q = GetOpponentTurn(P);
 
@@ -525,7 +508,7 @@ VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree *
 
   // 候補手生成
   MoveList candidate_move;
-  GetCandidateMoveOR<P>(&candidate_move);
+  GetCandidateMoveOR<P>(vlm_search, &candidate_move);
 
   // 展開
   VLMSearch child_vlm_search = vlm_search;
@@ -603,7 +586,7 @@ VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree 
 
   // 候補手生成
   MoveList candidate_move;
-  GetCandidateMoveAND<P>(&candidate_move);
+  GetCandidateMoveAND<P>(vlm_search, &candidate_move);
 
   // 候補手がすべて証明木に登録されているかチェックする
   MoveList proof_tree_move;

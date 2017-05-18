@@ -48,11 +48,12 @@ constexpr VLMSearchValue GetVLMWeakDisprovedSearchValue(const VLMSearchDepth dep
 typedef struct sturctVLMSearch
 {
   sturctVLMSearch()
-  : detect_dual_solution(true), remain_depth(kInBoardMoveNum)
+  : is_search(true), detect_dual_solution(true), remain_depth(kInBoardMoveNum)
   {
   }
 
-  bool detect_dual_solution;   //!< 余詰探索をするかどうかのフラグ
+  bool is_search;                 //!< 探索(true), 証明木取得, Simulaiton(false): MoveOrdering制御に使用
+  bool detect_dual_solution;      //!< 余詰探索をするかどうかのフラグ
   VLMSearchDepth remain_depth;    //!< 探索残り深さ
 }VLMSearch;
 
@@ -88,6 +89,7 @@ public:
 
   //! @brief 指し手を設定する
   void MakeMove(const MovePosition move);
+  void MakeMove(const VLMSearch &child_vlm_search, const MovePosition move);
 
   //! @brief 指し手を１手戻す
   void UndoMove();
@@ -115,17 +117,19 @@ private:
 
   //! @brief OR nodeの指し手生成
   template<PlayerTurn P>
-  void GetCandidateMoveOR(MoveList * const candidate_move) const;
+  void GetCandidateMoveOR(const VLMSearch &vlm_search, MoveList * const candidate_move) const;
 
   //! @brief AND nodeの指し手生成
   //! @retval true 相手に四ノビ or １手勝ちが発生, false 相手に四ノビ and １手勝ちがない
   template<PlayerTurn P>
-  bool GetCandidateMoveAND(MoveList * const candidate_move) const;
+  bool GetCandidateMoveAND(const VLMSearch &vlm_search, MoveList * const candidate_move) const;
 
   //! @brief OR nodeのMoveOrdering
   //! @pre 相手に四ノビが生じていない
+  //! @param candidate_move_bit 候補手の位置
+  //! @param candidate_move ソート済の指し手リストの格納先
   template<PlayerTurn P>
-  void MoveOrderingOR(MoveList * const candidate_move) const;
+  void MoveOrderingOR(const VLMSearch &vlm_search, MoveBitSet * const candidate_move_bit, MoveList * const candidate_move) const;
 
   //! @brief AND nodeのMoveOrdering
   //! @pre 相手に四ノビが生じていない
