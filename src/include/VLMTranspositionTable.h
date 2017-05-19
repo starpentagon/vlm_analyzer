@@ -6,6 +6,7 @@
 #define VLM_TRANSPOSITION_TABLE_H
 
 #include <array>
+#include <vector>
 
 #include "HashTable.h"
 #include "VLMParameter.h"
@@ -84,6 +85,7 @@ public:
 
 private:
   HashTable<VLMTableData> hash_table_;
+  std::vector<VLMTableData> proved_data_list_;    // 証明木を取得するため詰むデータを記録する
 };
 
 }   // namespace realcore

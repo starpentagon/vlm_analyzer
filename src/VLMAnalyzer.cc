@@ -1,7 +1,8 @@
 #include "VLMAnalyzer.h"
 
 using namespace std;
-using namespace realcore;
+
+namespace realcore{
 
 VLMAnalyzer::VLMAnalyzer(const MoveList &board_move_sequence)
 : Board(board_move_sequence, board_move_sequence.IsBlackTurn() ? kUpdateVLMAnalyzerBlack : kUpdateVLMAnalyzerWhite), 
@@ -323,3 +324,4 @@ const std::string VLMAnalyzer::GetSettingInfo() const
   ss << vlm_table_->GetDefinitionInfo();
   return ss.str();
 }
+}   // namespace realcore

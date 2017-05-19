@@ -1,5 +1,6 @@
 #include "BitBoard.h"
 #include "VLMTranspositionTable.h"
+#include "VLMAnalyzer.h"
 
 using namespace std;
 using namespace realcore;
@@ -17,18 +18,60 @@ void VLMTable::Upsert(const HashValue hash_value, const BitBoard &bit_board, con
   bit_board.GetBoardStateBit(&table_data.board);
 #endif
 
-  hash_table_.Upsert(hash_value, table_data);
+  VLMTableData in_table_data;
+  const bool is_conflict = hash_table_.IsConflict(hash_value, &in_table_data);
+
+  if(IsVLMProved(search_value)){
+    // 詰むデータの登録
+    // 登録先にすでに詰むデータが記録されている場合は別テーブルに登録する
+    if(is_conflict && IsVLMProved(in_table_data.search_value)){
+      proved_data_list_.emplace_back(table_data);
+    }else{
+      hash_table_.Upsert(hash_value, table_data);
+    }
+  }else{
+    // 詰まないデータの登録
+    // 登録先にすでに詰むデータが記録されている場合は登録を行わない
+    if(is_conflict && IsVLMProved(in_table_data.search_value)){
+      return;
+    }
+
+    hash_table_.Upsert(hash_value, table_data);
+  }
 }
 
 const bool VLMTable::find(const HashValue hash_value, const BitBoard &bit_board, VLMSearchValue * const search_value) const
 {
   VLMTableData table_data;
-  const auto find_result = hash_table_.find(hash_value, &table_data);
+  auto find_result = hash_table_.IsConflict(hash_value, &table_data);
 
   if(!find_result){
+    // hash値に対応する要素が未登録
     return false;
   }
+  
+  if(table_data.hash_value != hash_value){
+    if(IsVLMProved(table_data.search_value)){
+      // 別のHash値の詰むデータが登録されているため別テーブルに記録されている可能性がある
+      find_result = false;
 
+      for(const auto &proved_data : proved_data_list_){
+        if(proved_data.hash_value == hash_value){
+          table_data = proved_data;
+          find_result = true;
+          break;
+        }
+      }
+
+      if(!find_result){
+        return false;
+      }
+    }else{
+      // 別のHash値のデータが登録済で詰むデータではない
+      return false;
+    }
+  }
+  
 #if kUseExactBoardInfo
   // 盤面が完全一致するかチェック
   array<StateBit, 8> board_info;
@@ -46,6 +89,7 @@ const bool VLMTable::find(const HashValue hash_value, const BitBoard &bit_board,
 }
 
 void VLMTable::Initialize(){
+  proved_data_list_.clear();
   hash_table_.Initialize();
 }
 

@@ -35,14 +35,14 @@ inline constexpr VLMSearchDepth GetVLMDepth(const VLMSearchValue value){
 
 inline constexpr VLMSearchValue GetVLMProvedSearchValue(const VLMSearchDepth depth)
 {
-  assert(1 <= depth && depth <= kInBoardMoveNum);
+  assert(1 <= depth && depth <= static_cast<VLMSearchDepth>(kInBoardMoveNum));
   // value = kVLMProvedUB - (depth - 1)
   return kVLMProvedUB - (depth - 1);
 }
 
 inline constexpr VLMSearchValue GetVLMWeakDisprovedSearchValue(const VLMSearchDepth depth)
 {
-  assert(1 <= depth && depth <= kInBoardMoveNum);
+  assert(1 <= depth && depth <= static_cast<VLMSearchDepth>(kInBoardMoveNum));
   // value = kVLMWeakDisprovedUB - (depth - 1)
   return kVLMWeakDisprovedUB - (depth - 1);
 }
@@ -186,7 +186,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
 
   for(const auto move : candidate_move){
     MakeMove(child_vlm_search, move);
-    
+
     VLMSearchValue or_node_value = kVLMStrongDisproved;
 
     if(!proof_tree.empty()){
@@ -194,8 +194,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
       VLMSearch vlm_simulation = vlm_search;
       vlm_simulation.is_search = false;
       
-      or_node_value = SimulationOR<Q>(child_vlm_search, &proof_tree);
-//      std::cerr << "sim: " << board_move_sequence_.str() << " ," << proof_tree.str() << " ," << IsVLMProved(or_node_value) << std::endl;
+      or_node_value = SimulationOR<Q>(vlm_simulation, &proof_tree);
       search_manager_.AddSimulationResult(IsVLMProved(or_node_value));
     }
 
@@ -206,7 +205,6 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
       if(IsVLMProved(or_node_value) && GetVLMDepth(or_node_value) >= 3 && proof_tree.empty()){
         const auto is_generated = GetProofTree(&proof_tree);
         search_manager_.AddGetProofTreeResult(is_generated);
-//        std::cerr << "prf: " << board_move_sequence_.str() << " ," << proof_tree.str() << " dep: " << GetVLMDepth(or_node_value) << std::endl;
       }
     }
 
@@ -435,11 +433,11 @@ const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
     VLMSearchValue search_value;
     const auto is_find = vlm_table_->find(child_hash_value, bit_board_, &search_value);
     bool is_child_generated = false;
-    
+
     if(is_find && IsVLMProved(search_value)){
       proof_tree->AddChild(move);
       proof_tree->MoveChildNode(move);
-  
+
       is_child_generated = GetProofTreeOR<Q>(proof_tree);
   
       proof_tree->MoveParent();
