@@ -303,19 +303,13 @@ void VLMAnalyzer::MoveOrderingAND(MoveBitSet * const candidate_move_bit, MoveLis
     // 優先度1: 三を作る手
     MoveBitSet semi_three_move_bit;
     EnumerateSemiThreeMoves<P>(&semi_three_move_bit);
-    semi_three_move_bit &= *candidate_move_bit;
-
-    GetMoveList(semi_three_move_bit, candidate_move);
-    *candidate_move_bit ^= semi_three_move_bit;
+    SelectMove(semi_three_move_bit, candidate_move_bit, candidate_move);
   }
   {
     // 優先度2: 相手の四ノビ点に先着する手
     MoveBitSet opponent_four_move_bit;
     EnumerateFourMoves<Q>(&opponent_four_move_bit);
-    opponent_four_move_bit &= *candidate_move_bit;
-
-    GetMoveList(opponent_four_move_bit, candidate_move);
-    *candidate_move_bit ^= opponent_four_move_bit;
+    SelectMove(opponent_four_move_bit, candidate_move_bit, candidate_move);
   }
 
   GetMoveList(*candidate_move_bit, candidate_move);

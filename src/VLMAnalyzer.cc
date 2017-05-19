@@ -105,10 +105,7 @@ void VLMAnalyzer::MoveOrderingOR<kBlackTurn>(const VLMSearch &vlm_search, MoveBi
     // 残り深さ３以上
     // 四三を作る手を優先する
     MoveBitSet four_three_bit(four_bit & three_bit);
-    four_three_bit &= *candidate_move_bit;
-
-    GetMoveList(four_three_bit, candidate_move);
-    *candidate_move_bit ^= four_three_bit;
+    SelectMove(four_three_bit, candidate_move_bit, candidate_move);
   }
   
   if(vlm_search.remain_depth >= 5){
@@ -118,52 +115,32 @@ void VLMAnalyzer::MoveOrderingOR<kBlackTurn>(const VLMSearch &vlm_search, MoveBi
 
     {
       MoveBitSet threat_mise_bit((four_bit | three_bit) & mise_bit);
-      threat_mise_bit &= *candidate_move_bit;
-
-      GetMoveList(threat_mise_bit, candidate_move);
-      *candidate_move_bit ^= threat_mise_bit;
+      SelectMove(threat_mise_bit, candidate_move_bit, candidate_move);
     }
 
     // 両ミセ
-    {
-      multi_mise_bit &= *candidate_move_bit;
-
-      GetMoveList(multi_mise_bit, candidate_move);
-      *candidate_move_bit ^= multi_mise_bit;
-    }
+    SelectMove(multi_mise_bit, candidate_move_bit, candidate_move);
   }
 
   // 剣先
   if(vlm_search.remain_depth >= 5){
     MoveBitSet point_of_sword_bit;
     EnumeratePointOfSwordMoves<P>(&point_of_sword_bit);
-    point_of_sword_bit &= *candidate_move_bit;
-
-    GetMoveList(point_of_sword_bit, candidate_move);
-    *candidate_move_bit ^= point_of_sword_bit;
+    SelectMove(point_of_sword_bit, candidate_move_bit, candidate_move);
   }
 
   // 二
   if(vlm_search.remain_depth >= 5){
     MoveBitSet two_bit;
     EnumerateTwoMoves<P>(&two_bit);
-    two_bit &= *candidate_move_bit;
-
-    GetMoveList(two_bit, candidate_move);
-    *candidate_move_bit ^= two_bit;
+    SelectMove(two_bit, candidate_move_bit, candidate_move);
   }
 
   // 四
-  four_bit &= *candidate_move_bit;
-
-  GetMoveList(four_bit, candidate_move);
-  *candidate_move_bit ^= four_bit;
+  SelectMove(four_bit, candidate_move_bit, candidate_move);
 
   // 三
-  three_bit &= *candidate_move_bit;
-
-  GetMoveList(three_bit, candidate_move);
-  *candidate_move_bit ^= three_bit;
+  SelectMove(three_bit, candidate_move_bit, candidate_move);
 
   // 残りの手をすべて生成
   GetMoveList(*candidate_move_bit, candidate_move);

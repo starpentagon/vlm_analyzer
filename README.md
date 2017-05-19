@@ -1,5 +1,5 @@
 # VLM analyzer
-The program is a problem analyzer for VLM(Victory by limited moves).
+The program is a analyzer for VLM(Victory by limited moves) problems.
 
 This repository provides the following interfaces:
 * CUI interface located in "cui" directory
