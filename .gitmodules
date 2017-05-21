@@ -1,0 +1,3 @@
+[submodule "realcore"]
+	path = realcore
+	url = git@github.com:starpentagon/realcore.git
