@@ -70,14 +70,25 @@ void VLMAnalyzer::MakeMove(const MovePosition move)
 
 void VLMAnalyzer::MakeMove(const VLMSearch &child_vlm_search, const MovePosition move)
 {
-  search_sequence_ += move;
-  Board::MakeMove(move);
+  const bool is_black_turn = (board_move_sequence_.size() - search_sequence_.size()) % 2 == 0;
 
-  if(child_vlm_search.remain_depth == kShallowDepth){
-    auto &board_open_state = board_open_state_list_.back();
-    const UpdateOpenStateFlag update_flag_shallow = board_open_state.GetUpdateOpenStateFlag() == kUpdateVLMAnalyzerBlack ? kUpdateVLMAnalyzerShallowBlack : kUpdateVLMAnalyzerShallowWhite;
-    board_open_state.SetUpdateOpenStateFlag(update_flag_shallow);
+  if(child_vlm_search.remain_depth == 1){
+    const auto update_flag = is_black_turn ? kUpdateVLMAnalyzerDepthOneBlack : kUpdateVLMAnalyzerDepthOneWhite;
+    Board::MakeMove(move, update_flag);
+  }else if(child_vlm_search.remain_depth == 2){
+    const auto update_flag = is_black_turn ? kUpdateVLMAnalyzerDepthTwoBlack : kUpdateVLMAnalyzerDepthTwoWhite;
+    Board::MakeMove(move, update_flag);
+  }else if(child_vlm_search.remain_depth == 3){
+    const auto update_flag = is_black_turn ? kUpdateVLMAnalyzerDepthThreeBlack : kUpdateVLMAnalyzerDepthThreeWhite;
+    Board::MakeMove(move, update_flag);
+  }else if(child_vlm_search.remain_depth == 4){
+    const auto update_flag = is_black_turn ? kUpdateVLMAnalyzerDepthFourBlack : kUpdateVLMAnalyzerDepthFourWhite;
+    Board::MakeMove(move, update_flag);
+  }else{
+    Board::MakeMove(move);
   }
+
+  search_sequence_ += move;
 }
 
 void VLMAnalyzer::UndoMove()

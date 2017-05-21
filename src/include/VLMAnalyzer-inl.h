@@ -201,7 +201,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
     if(!IsVLMProved(or_node_value)){
       // Simulationをしなかった or 失敗した場合は通常探索を行う
       or_node_value = SolveOR<Q>(child_vlm_search, vlm_result);
-      
+
       if(IsVLMProved(or_node_value) && GetVLMDepth(or_node_value) >= 3 && proof_tree.empty()){
         const auto is_generated = GetProofTree(&proof_tree);
         search_manager_.AddGetProofTreeResult(is_generated);
@@ -281,9 +281,10 @@ bool VLMAnalyzer::GetCandidateMoveAND(const VLMSearch &vlm_search, MoveList * co
     board_move_sequence_.GetPossibleMove(forbidden_bit, &guard_move_bit);
   }
 
-  if(vlm_search.is_search){
+  if(vlm_search.is_search && vlm_search.remain_depth >= 4){
     MoveOrderingAND<P>(&guard_move_bit, candidate_move);
   }else{
+    // Passが先頭で生成され、Null move pruningを行うことに相当する
     GetMoveList(guard_move_bit, candidate_move);
   }
 
