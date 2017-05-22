@@ -202,7 +202,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
       // Simulationをしなかった or 失敗した場合は通常探索を行う
       or_node_value = SolveOR<Q>(child_vlm_search, vlm_result);
 
-      if(IsVLMProved(or_node_value) && GetVLMDepth(or_node_value) >= 3 && proof_tree.empty()){
+      if(IsVLMProved(or_node_value) && GetVLMDepth(or_node_value) >= 3){
         const auto is_generated = GetProofTree(&proof_tree);
         search_manager_.AddGetProofTreeResult(is_generated);
       }

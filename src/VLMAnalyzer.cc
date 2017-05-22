@@ -277,7 +277,8 @@ void VLMAnalyzer::MoveOrderingOR<kWhiteTurn>(const VLMSearch &vlm_search, MoveBi
 const bool VLMAnalyzer::GetProofTree(MoveTree * const proof_tree)
 {
   assert(proof_tree != nullptr);
-  assert(proof_tree->empty());
+
+  proof_tree->MoveRootNode();
 
   const bool is_black_turn = board_move_sequence_.IsBlackTurn();
   bool is_generated = false;
