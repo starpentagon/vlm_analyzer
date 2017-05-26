@@ -194,7 +194,7 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
       VLMSearch vlm_simulation = vlm_search;
       vlm_simulation.is_search = false;
       
-      or_node_value = SimulationOR<Q>(vlm_simulation, &proof_tree);
+      or_node_value = SimulationOR<Q>(vlm_simulation, kCheckVLMTable, &proof_tree);
       search_manager_.AddSimulationResult(IsVLMProved(or_node_value));
     }
 
@@ -322,7 +322,7 @@ inline const SearchManager& VLMAnalyzer::GetSearchManager() const
 }
 
 template<PlayerTurn P>
-const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
+const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree, const bool generate_full_tree)
 {
   assert(proof_tree != nullptr);
   
@@ -394,7 +394,7 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
     proof_tree->MoveChildNode(move);
     MakeMove(move);
 
-    const auto is_child_generated = GetProofTreeAND<Q>(proof_tree);
+    const auto is_child_generated = GetProofTreeAND<Q>(proof_tree, generate_full_tree);
 
     UndoMove();
     proof_tree->MoveParent();
@@ -406,7 +406,7 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
 }
 
 template<PlayerTurn P>
-const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
+const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree, const bool generate_full_tree)
 {
   assert(proof_tree != nullptr);
 
@@ -415,14 +415,38 @@ const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
   vlm_search.remain_depth = 225;
   
   MoveList candidate_move;
-  GetCandidateMoveAND<P>(vlm_search, &candidate_move);
+  const auto is_terminate_guard = GetCandidateMoveAND<P>(vlm_search, &candidate_move);
 
   constexpr PlayerTurn Q = GetOpponentTurn(P);
+
+  // 集約した証明木を生成する場合はPassした際の詰む手順を求める
+  MoveTree threat_proof_tree;
+
+  if(generate_full_tree == kGenerateSummarizedTree && !is_terminate_guard){
+    MakeMove(kNullMove);
+    GetProofTreeOR<Q>(&threat_proof_tree, kGenerateSummarizedTree);
+    UndoMove();
+  }
 
   // すべての候補手の詰みが登録されているかチェックする
   for(const auto move : candidate_move){
     // すべての候補手が登録済であることが期待されるのでBitBoardのみの更新ではなくMakeMove, Undoで更新する
     MakeMove(move);
+
+    // 集約した証明木を生成する場合はPassした時の詰む手順と同手順詰む手は記録しない
+    if(generate_full_tree == kGenerateSummarizedTree && move != kNullMove && !threat_proof_tree.empty()){
+      VLMSearch vlm_simulation;
+      vlm_simulation.is_search = false;
+      
+      const auto or_node_value = SimulationOR<Q>(vlm_simulation, kScanProofTree, &threat_proof_tree);
+      search_manager_.AddSimulationResult(IsVLMProved(or_node_value));
+
+      if(IsVLMProved(or_node_value)){
+        UndoMove();
+        continue;
+      }
+    }
+
     const auto child_hash_value = CalcHashValue(board_move_sequence_); // AND nodeはPassがあるため逐次計算する
 
     VLMSearchValue search_value;
@@ -433,7 +457,7 @@ const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
       proof_tree->AddChild(move);
       proof_tree->MoveChildNode(move);
 
-      is_child_generated = GetProofTreeOR<Q>(proof_tree);
+      is_child_generated = GetProofTreeOR<Q>(proof_tree, generate_full_tree);
   
       proof_tree->MoveParent();
     }
@@ -450,7 +474,7 @@ const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
 }
 
 template<PlayerTurn P>
-VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree * const proof_tree)
+VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, const bool check_vlm_table, MoveTree * const proof_tree)
 {
   assert(proof_tree != nullptr);
 
@@ -463,7 +487,7 @@ VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree *
   // 置換表をチェック
   const auto hash_value = CalcHashValue(board_move_sequence_);
   VLMSearchValue table_value = 0;
-  const bool is_registered = vlm_table_->find(hash_value, bit_board_, &table_value);
+  bool is_registered = check_vlm_table ? vlm_table_->find(hash_value, bit_board_, &table_value) : false;
 
   if(is_registered){
     if(IsVLMProved(table_value) || IsVLMDisproved(table_value)){
@@ -516,7 +540,7 @@ VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree *
     }
 
     MakeMove(move);
-    VLMSearchValue and_node_value = SimulationAND<Q>(child_vlm_search, proof_tree);
+    VLMSearchValue and_node_value = SimulationAND<Q>(child_vlm_search, check_vlm_table, proof_tree);
     UndoMove();
     proof_tree->MoveParent();
 
@@ -538,7 +562,7 @@ VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree *
 }
 
 template<PlayerTurn P>
-VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree * const proof_tree)
+VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, const bool check_vlm_table, MoveTree * const proof_tree)
 {
   assert(proof_tree != nullptr);
 
@@ -551,7 +575,7 @@ VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree 
   // 置換表をチェック
   const auto hash_value = CalcHashValue(board_move_sequence_);
   VLMSearchValue table_value = 0;
-  const bool is_registered = vlm_table_->find(hash_value, bit_board_, &table_value);
+  const bool is_registered = check_vlm_table ? vlm_table_->find(hash_value, bit_board_, &table_value) : false;
 
   if(is_registered){
     if(IsVLMProved(table_value) || IsVLMDisproved(table_value)){
@@ -607,7 +631,7 @@ VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree 
   for(const auto move : candidate_move){
     proof_tree->MoveChildNode(move);
     MakeMove(move);
-    VLMSearchValue or_node_value = SimulationOR<Q>(child_vlm_search, proof_tree);
+    VLMSearchValue or_node_value = SimulationOR<Q>(child_vlm_search, check_vlm_table, proof_tree);
     UndoMove();
     proof_tree->MoveParent();
 

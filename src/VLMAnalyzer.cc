@@ -49,7 +49,7 @@ void VLMAnalyzer::Solve(const VLMSearch &vlm_search, VLMResult * const vlm_resul
   }
 
   if(vlm_result->solved){
-    GetProofTree(&vlm_result->proof_tree);
+    GetSummarizedProofTree(&vlm_result->proof_tree);
   }
 }
 
@@ -284,9 +284,31 @@ const bool VLMAnalyzer::GetProofTree(MoveTree * const proof_tree)
   bool is_generated = false;
 
   if(is_black_turn){
-    is_generated = GetProofTreeOR<kBlackTurn>(proof_tree);
+    is_generated = GetProofTreeOR<kBlackTurn>(proof_tree, kGenerateFullTree);
   }else{
-    is_generated = GetProofTreeOR<kWhiteTurn>(proof_tree);
+    is_generated = GetProofTreeOR<kWhiteTurn>(proof_tree, kGenerateFullTree);
+  }
+
+  if(!is_generated){
+    proof_tree->clear();
+  }
+
+  return is_generated;
+}
+
+const bool VLMAnalyzer::GetSummarizedProofTree(MoveTree * const proof_tree)
+{
+  assert(proof_tree != nullptr);
+
+  proof_tree->MoveRootNode();
+
+  const bool is_black_turn = board_move_sequence_.IsBlackTurn();
+  bool is_generated = false;
+
+  if(is_black_turn){
+    is_generated = GetProofTreeOR<kBlackTurn>(proof_tree, kGenerateSummarizedTree);
+  }else{
+    is_generated = GetProofTreeOR<kWhiteTurn>(proof_tree, kGenerateSummarizedTree);
   }
 
   if(!is_generated){
