@@ -71,7 +71,13 @@ string VLMResultString(const VLMAnalyzer &vlm_analyzer, const VLMResult &vlm_res
     ss << "Solved" << endl;
 
     ss << "First Move: " << MoveString(vlm_result.proof_tree.GetTopNodeMove()) << endl;
-    ss << "Proof Tree: " << vlm_result.proof_tree.str();
+    ss << "Proof Tree: " << vlm_result.proof_tree.str() << endl;
+
+    if(vlm_result.detect_dual_solution){
+      ss << "Dual Solution: " << vlm_result.dual_solution_tree.str();
+    }else{
+      ss << "Dual Solution: -";
+    }
   }else if(vlm_result.disproved){
     ss << "Disproved";
   }else{

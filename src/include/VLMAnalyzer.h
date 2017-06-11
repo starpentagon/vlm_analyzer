@@ -61,7 +61,7 @@ typedef struct sturctVLMSearch
 typedef struct structVLMResult
 {
   structVLMResult()
-  : solved(false), disproved(false), search_depth(0)
+  : solved(false), disproved(false), search_depth(0), detect_dual_solution(false)
   {
   }
 
@@ -69,6 +69,8 @@ typedef struct structVLMResult
   bool disproved;       // 反証できたかどうか
   MoveTree proof_tree;  // 解図できた時の証明木
   VLMSearchDepth search_depth;     // 探索済の深さ
+  bool detect_dual_solution;       // 余詰の有無
+  MoveTree dual_solution_tree;     // 余詰の変化
 }VLMResult;
 
 // 前方宣言
@@ -108,7 +110,36 @@ public:
   const std::string GetSettingInfo() const;
 
 private:
+  //! @brief 余詰判定を行う
+  //! @param dual_solution_tree 余詰解
+  //! @retval true 余詰が存在する
+  const bool DetectDualSolution(MoveTree * dual_solution_tree);
+
+  //! @brief 余詰判定(OR node)
+  template<PlayerTurn P>
+  const bool DetectDualSolutionOR(MoveTree * dual_solution_tree);
   
+  //! @brief 余詰判定(AND node)
+  template<PlayerTurn P>
+  const bool DetectDualSolutionAND(MoveTree * dual_solution_tree);
+
+  //! @brief 余詰探索で手順前後のVCFを検知するため指定の指し手以下VCFがあるか判定する
+  //! @param move 指定の指し手
+  //! @param vcf_sequence VCF手順の格納先
+  //! @retval true move以下VCFが存在
+  //! @note 余詰探索ではVCFの手順前後を見るためVCF手数が1手の場合はfalseを返す
+  //! @note P moveの手番
+  template<PlayerTurn P>
+  const bool GetVCFSequence(const MovePosition move, MoveList * const vcf_sequence);
+
+  //! @brief 余詰探索で手順前後のVCFを検知するため証明木がVCFかどうかを判定する
+  //! @param proof_tree 証明木
+  //! @param vcf_sequence VCF手順の格納先
+  //! @retval true 証明木内にVCFが存在
+  //! @note P 証明木のRoot nodeの手番
+  template<PlayerTurn P>
+  const bool IsProofTreeVCF(MoveTree * const proof_tree, MoveList * const vcf_sequence);
+
   //! @brief OR nodeの探索
   template<PlayerTurn P>
   VLMSearchValue SolveOR(const VLMSearch &vlm_search, VLMResult * const vlm_result);
@@ -147,10 +178,12 @@ private:
   static constexpr bool kGenerateSummarizedTree = false;  // Passして詰む手順と同一手順で詰む変化はPassに集約する
 
   //! @brief 証明木の取得(OR node)
+  //! @param generate_full_tree 証明木の生成モード
   template<PlayerTurn P>
   const bool GetProofTreeOR(MoveTree * const proof_tree, const bool generate_full_tree);
 
   //! @brief 証明木の取得(AND node)
+  //! @param generate_full_tree 証明木の生成モード
   template<PlayerTurn P>
   const bool GetProofTreeAND(MoveTree * const proof_tree, const bool generate_full_tree);
 
@@ -176,6 +209,9 @@ private:
 
   //! @brief 子局面の探索結果値から現局面の探索結果値を算出する
   const VLMSearchValue GetSearchValue(const VLMSearchValue child_search_value) const;
+
+  //! @brief root nodeかどうかを返す
+  const bool IsRootNode() const;
 
   SearchManager search_manager_;    //!< 探索制御
   MoveList search_sequence_;        //!< 探索手順

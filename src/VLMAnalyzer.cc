@@ -51,6 +51,10 @@ void VLMAnalyzer::Solve(const VLMSearch &vlm_search, VLMResult * const vlm_resul
   if(vlm_result->solved){
     GetSummarizedProofTree(&vlm_result->proof_tree);
   }
+
+  if(vlm_result->solved && vlm_search.detect_dual_solution){
+    vlm_result->detect_dual_solution = DetectDualSolution(&vlm_result->dual_solution_tree);
+  }
 }
 
 VLMSearchValue VLMAnalyzer::SolveOR(const bool is_black_turn, const VLMSearch &vlm_search, VLMResult * const vlm_result)
@@ -316,6 +320,28 @@ const bool VLMAnalyzer::GetSummarizedProofTree(MoveTree * const proof_tree)
   }
 
   return is_generated;
+}
+
+const bool VLMAnalyzer::DetectDualSolution(MoveTree * dual_solution_tree)
+{
+  assert(dual_solution_tree != nullptr);
+
+  dual_solution_tree->MoveRootNode();
+
+  const bool is_black_turn = board_move_sequence_.IsBlackTurn();
+  bool detect_dual_solution = false;
+
+  if(is_black_turn){
+    detect_dual_solution = DetectDualSolutionOR<kBlackTurn>(dual_solution_tree);
+  }else{
+    detect_dual_solution = DetectDualSolutionOR<kWhiteTurn>(dual_solution_tree);
+  }
+
+  if(!detect_dual_solution){
+    dual_solution_tree->clear();
+  }
+
+  return detect_dual_solution;
 }
 
 const std::string VLMAnalyzer::GetSettingInfo() const

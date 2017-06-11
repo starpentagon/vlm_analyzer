@@ -112,6 +112,7 @@ void ParallelVLMAnalyzer::OutputHeader()
   cout << "FirstMove,";
   cout << "ProofTree,";
   cout << "SearchedDepth,";
+  cout << "DualSolution,";
   cout << "Time(sec),";
   cout << "Nodes,";
   cout << "NPS";
@@ -153,6 +154,13 @@ void ParallelVLMAnalyzer::Output(const size_t problem_id, const realcore::VLMAna
   // SearchedDepth
   ss << vlm_result.search_depth << ",";
   
+  // DualSolution
+  if(vlm_result.detect_dual_solution){
+    ss << vlm_result.dual_solution_tree.str() << ",";
+  }else{
+    ss << "-,";
+  }
+
   const auto& search_manager = vlm_analyzer.GetSearchManager();
 
   // Time(sec)
