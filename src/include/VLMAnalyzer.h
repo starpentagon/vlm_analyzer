@@ -123,6 +123,12 @@ private:
   template<PlayerTurn P>
   const bool DetectDualSolutionAND(MoveTree * dual_solution_tree);
 
+  //! @brief 余詰となる手を管理する
+  //! @param move 詰む手
+  //! @param move_proof_tree 詰む手 -> 証明木のmap
+  template<PlayerTurn P>
+  void UpdateDualSolution(const MovePosition move, std::map<MovePosition, MoveTree> * const move_proof_tree);
+
   //! @brief 余詰探索で手順前後のVCFを検知するため指定の指し手以下VCFがあるか判定する
   //! @param move 指定の指し手
   //! @param vcf_sequence VCF手順の格納先

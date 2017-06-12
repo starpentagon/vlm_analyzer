@@ -713,24 +713,10 @@ const bool VLMAnalyzer::DetectDualSolutionOR(MoveTree * dual_solution_tree)
     return false;
   }
 
-  // 対称性チェック
-  std::vector<BoardSymmetry> symmetry_list;
-
-  for(const auto symmetry : GetBoardSymmetry()){
-    if(symmetry == kIdenticalSymmetry){
-      continue;
-    }
-
-    if(IsBoardSymmetric(symmetry)){
-      symmetry_list.emplace_back(symmetry);
-    }
-  }
-
   constexpr PositionState S = GetPlayerStone(P);
   constexpr PlayerTurn Q = GetOpponentTurn(P);
-  bool detect_dual_solution = false;
-  MovePosition proved_move = kInvalidMove;
-  MoveList proved_vcf_sequence;
+  std::map<MovePosition, MoveTree> move_proof_tree;   // 詰む手と証明木のmap
+  bool detect_dual_solution = false;    // 余詰フラグ
 
   // いずれかの候補手で詰みが登録されているかチェックする
   for(const auto move : candidate_move){
@@ -752,57 +738,21 @@ const bool VLMAnalyzer::DetectDualSolutionOR(MoveTree * dual_solution_tree)
     }
 
     // move: 登録済の詰む手
-    if(proved_move != kInvalidMove){
-      // 複数の詰む手が存在
-      bool dual_solution = true;
+    UpdateDualSolution<P>(move, &move_proof_tree);
 
-      // 盤面が対称形の場合、対称な位置の詰む手は余詰とみなさない
-      for(const auto symmetric : symmetry_list){
-        if(GetSymmetricMove(proved_move, symmetric)){
-          dual_solution = false;
-          break;
-        }
+    if(move_proof_tree.size() >= 2){
+      // 余詰
+      dual_solution_tree->MoveRootNode();
+      dual_solution_tree->AddChild(search_sequence_);
+      dual_solution_tree->MoveChildNode(search_sequence_);
+
+      for(const auto &move_tree : move_proof_tree){
+        dual_solution_tree->AddChild(move_tree.first);
       }
 
-      if(!proved_vcf_sequence.empty()){
-        MoveList vcf_sequence;
-        GetVCFSequence<P>(move, &vcf_sequence);
-
-        MoveBitSet proved_vcf_black, proved_vcf_white, vcf_black, vcf_white;
-
-        for(size_t i=0, size=proved_vcf_sequence.size(); i<size; i++){
-          const auto move = proved_vcf_sequence[i];
-          MoveBitSet &move_bit = i % 2 == 0 ? proved_vcf_black : proved_vcf_white;
-          move_bit.set(move);
-        }
-
-        for(size_t i=0, size=vcf_sequence.size(); i<size; i++){
-          const auto move = vcf_sequence[i];
-          MoveBitSet &move_bit = i % 2 == 0 ? vcf_black : vcf_white;
-          move_bit.set(move);
-        }
-
-        // VCFの手順前後の場合、余詰とみなさない
-        if(proved_vcf_black == vcf_black && proved_vcf_white == vcf_white){
-          dual_solution = false;
-        }
-      }
-
-      if(dual_solution){
-        // 余詰
-        dual_solution_tree->MoveRootNode();
-        dual_solution_tree->AddChild(search_sequence_);
-        dual_solution_tree->MoveChildNode(search_sequence_);
-
-        dual_solution_tree->AddChild(proved_move);
-        dual_solution_tree->AddChild(move);
-
-        detect_dual_solution = true;
-      }
-    }else{
-      proved_move = move;
-      GetVCFSequence<P>(move, &proved_vcf_sequence);
+      detect_dual_solution = true;
     }
+
 
     MakeMove(move);
     const auto child_detect_dual_solution = DetectDualSolutionAND<Q>(dual_solution_tree);
@@ -812,6 +762,53 @@ const bool VLMAnalyzer::DetectDualSolutionOR(MoveTree * dual_solution_tree)
   }
 
   return detect_dual_solution;
+}
+
+template<PlayerTurn P>
+void VLMAnalyzer::UpdateDualSolution(const MovePosition move, std::map<MovePosition, MoveTree> * const move_proof_tree)
+{
+  assert(move_proof_tree != nullptr);
+
+  if(!move_proof_tree->empty()){
+    // 盤面の対称性チェック
+    std::vector<BoardSymmetry> board_symmetry_list;
+
+    for(const auto symmetry : GetBoardSymmetry()){
+      if(symmetry == kIdenticalSymmetry){
+        continue;
+      }
+
+      if(IsBoardSymmetric(symmetry)){
+        board_symmetry_list.emplace_back(symmetry);
+      }
+    }
+
+    // 盤面が対称形の場合、対称な位置の詰む手は余詰とみなさない
+    for(const auto symmetric : board_symmetry_list){
+      const auto symmetric_move = GetSymmetricMove(move, symmetric);
+      
+      if(move_proof_tree->find(symmetric_move) != move_proof_tree->end()){
+        return;
+      }
+    }
+  }
+
+  // moveの証明木を取得する
+  assert(move_proof_tree->find(move) == move_proof_tree->end());
+  move_proof_tree->insert(std::pair<MovePosition, MoveTree>(move, MoveTree()));
+
+  MoveTree &proof_tree = (*move_proof_tree)[move];
+
+  proof_tree.AddChild(move);
+  proof_tree.MoveChildNode(move);
+
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+  const bool generate_proof_tree = GetProofTreeAND<Q>(&proof_tree, kGenerateSummarizedTree);
+
+  if(!generate_proof_tree){
+    assert(!generate_proof_tree);
+    return;
+  }
 }
 
 template<PlayerTurn P>
@@ -835,7 +832,9 @@ const bool VLMAnalyzer::DetectDualSolutionAND(MoveTree * dual_solution_tree)
   const auto depth = GetVLMDepth(search_value);
   constexpr PlayerTurn Q = GetOpponentTurn(P);
   bool single_solution = false;     // 余詰のない最強防が存在するかのフラグ
-  MoveList strongest_guard_list;    // 最強防手のリスト
+
+  // 最強防の余詰判定により余詰木の更新要否が変わるためコピーを作って更新する
+  MoveTree updated_dual_solution_tree = *dual_solution_tree;
 
   // すべての候補手の詰みが登録されているかチェックする
   for(const auto move : candidate_move){
@@ -849,33 +848,25 @@ const bool VLMAnalyzer::DetectDualSolutionAND(MoveTree * dual_solution_tree)
     const auto child_depth = GetVLMDepth(child_search_value);
 
     // 最強防のみチェックする
-    if(is_find && IsVLMProved(child_search_value) && child_depth == depth - 1){
-      MoveTree child_tree;
-      const auto child_detect_dual_solution = DetectDualSolutionOR<Q>(&child_tree);
+    const bool is_check = is_find && IsVLMProved(child_search_value) && child_depth + 1 == depth;
+    bool child_detect_dual_solution = is_check;
 
-      if(!child_detect_dual_solution){
-        // 余詰のない最強防が見つかった -> 作意手順とみなし、他の手は変化別詰とみなす
-        single_solution = true;
-        UndoMove();
-        break;
-      }else{
-        strongest_guard_list += move;
-      }
+    if(is_check){
+      child_detect_dual_solution = DetectDualSolutionOR<Q>(&updated_dual_solution_tree);
     }
 
     UndoMove();
+
+    if(!child_detect_dual_solution){
+      // 余詰のない最強防が見つかった -> 作意手順とみなし、他の手は変化別詰とみなす
+      single_solution = true;
+      break;
+    }
   }
 
   if(!single_solution){
-    // いずれの最強防にも余詰がある -> 余詰が生じている
-    for(const auto move : strongest_guard_list){
-      MakeMove(move);
-
-      // 余詰手順を取得する
-      DetectDualSolutionOR<Q>(dual_solution_tree);
-
-      UndoMove();
-    }
+    // いずれの最強防にも余詰がある -> 余詰が生じている -> 余詰木を更新する
+    *dual_solution_tree = updated_dual_solution_tree;
   }
 
   return !single_solution;
