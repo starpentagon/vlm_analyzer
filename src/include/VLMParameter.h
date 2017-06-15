@@ -14,7 +14,7 @@ namespace realcore{
 
 //! @brief 置換表に盤面情報をすべて用いるかどうかのフラグ
 //! @note (pros)正確に同一局面を判定できる
-//! @note (cons)テーブル要素サイズが16byte->80byteに増え同一容量で保持できる要素数が約1/4になる
+//! @note (cons)テーブル要素サイズが16byte->80byteに増え同一容量で保持できる要素数が約1/5になる
 #define kUseExactBoardInfo 1
 
 //! @brief 置換表のデフォルトサイズ(1GB)
