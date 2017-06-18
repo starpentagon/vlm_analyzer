@@ -8,6 +8,7 @@ This repository provides the following interfaces:
 ## Requirements
 * git lfs 1.5.6 or newer
 * C++ compiler
+   * g++ 5.4.0 or newer
    * clang 3.8 or newer
 * CMake 3.5.1 or newer
 * boost 1.63 or newer

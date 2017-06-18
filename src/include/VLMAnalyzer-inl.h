@@ -211,7 +211,8 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
     // (i)証明木が存在する
     // (ii)余詰探索なし or 余詰探索あり かつ 証明木が弱防に対する手順(余詰探索では強防に対してはすべての候補手展開が必要なため)
     bool simulation_check = !proof_tree.empty();
-    simulation_check &= !vlm_search.detect_dual_solution || (vlm_search.detect_dual_solution && proof_tree.depth() < child_vlm_search.remain_depth);
+    simulation_check &= !vlm_search.detect_dual_solution
+       || (vlm_search.detect_dual_solution && proof_tree.depth() < static_cast<size_t>(child_vlm_search.remain_depth));
 
     if(simulation_check){
       // 証明木が存在する場合はSimulationを行う
