@@ -31,7 +31,7 @@ private:
   const bool GetProblemIndex(size_t * const problem_index);
 
   //! @brief 解図結果を出力する
-  void Output(const size_t problem_id, const realcore::VLMAnalyzer &vlm_analyzer, const realcore::VLMResult &vlm_result) const;
+  void Output(const size_t problem_id, const realcore::VLMAnalyzer &vlm_analyzer, const realcore::VLMSearch &vlm_search, const realcore::VLMResult &vlm_result) const;
   
 
   std::deque<size_t> problem_index_list_;    //!< 問題indexのリスト

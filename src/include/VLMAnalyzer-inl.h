@@ -103,19 +103,37 @@ VLMSearchValue VLMAnalyzer::SolveOR(const VLMSearch &vlm_search, VLMResult * con
 
   // 展開
   VLMSearch child_vlm_search = vlm_search;
-  child_vlm_search.remain_depth--;
   constexpr PlayerTurn Q = GetOpponentTurn(P);
   VLMSearchValue or_node_value = kVLMStrongDisproved;
+  bool is_search_all_candidate = vlm_search.detect_dual_solution;   // 余詰探索用に全候補手を展開するかのフラグ
 
-  for(const auto move : candidate_move){
-    MakeMove(child_vlm_search, move);
-    VLMSearchValue and_node_value = SolveAND<Q>(child_vlm_search, vlm_result);
-    UndoMove();
+  // 多重反復深化
+  const VLMSearchDepth max_child_depth = vlm_search.remain_depth - 1;
+  const VLMSearchDepth min_child_depth = is_registered ? max_child_depth : 2;
 
-    or_node_value = std::max(or_node_value, and_node_value);
-    
-    if(!vlm_search.detect_dual_solution && IsVLMProved(and_node_value)){
-      break;
+  for(VLMSearchDepth child_depth=min_child_depth; child_depth<=max_child_depth; child_depth+=2){
+    child_vlm_search.remain_depth = child_depth;
+
+    for(const auto move : candidate_move){
+      MakeMove(child_vlm_search, move);
+      VLMSearchValue and_node_value = SolveAND<Q>(child_vlm_search, vlm_result);
+      UndoMove();
+
+      or_node_value = std::max(or_node_value, and_node_value);
+      
+      if(is_search_all_candidate && !IsRootNode() && IsVLMProved(or_node_value)){
+        const auto vlm_depth = GetVLMDepth(or_node_value);
+
+        if(vlm_depth < max_child_depth){
+          // 残り深さ未満で解が見つかった -> 親ノードは弱防のため余詰探索を行わない
+          is_search_all_candidate = false;
+        }
+      }
+      
+      if(!is_search_all_candidate && IsVLMProved(or_node_value)){
+        child_depth += max_child_depth;   // child_depthのloopを抜けるため最大深さを超える値を設定する
+        break;
+      }
     }
   }
 
@@ -189,12 +207,19 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
 
     VLMSearchValue or_node_value = kVLMStrongDisproved;
 
-    if(!proof_tree.empty()){
+    // Simulation条件
+    // (i)証明木が存在する
+    // (ii)余詰探索なし or 余詰探索あり かつ 証明木が弱防に対する手順(余詰探索では強防に対してはすべての候補手展開が必要なため)
+    bool simulation_check = !proof_tree.empty();
+    simulation_check &= !vlm_search.detect_dual_solution
+       || (vlm_search.detect_dual_solution && proof_tree.depth() < static_cast<size_t>(child_vlm_search.remain_depth));
+
+    if(simulation_check){
       // 証明木が存在する場合はSimulationを行う
-      VLMSearch vlm_simulation = vlm_search;
+      VLMSearch vlm_simulation = child_vlm_search;
       vlm_simulation.is_search = false;
       
-      or_node_value = SimulationOR<Q>(vlm_simulation, &proof_tree);
+      or_node_value = SimulationOR<Q>(vlm_simulation, kCheckVLMTable, &proof_tree);
       search_manager_.AddSimulationResult(IsVLMProved(or_node_value));
     }
 
@@ -202,7 +227,14 @@ VLMSearchValue VLMAnalyzer::SolveAND(const VLMSearch &vlm_search, VLMResult * co
       // Simulationをしなかった or 失敗した場合は通常探索を行う
       or_node_value = SolveOR<Q>(child_vlm_search, vlm_result);
 
-      if(IsVLMProved(or_node_value) && GetVLMDepth(or_node_value) >= 3 && proof_tree.empty()){
+      // Simulation用証明木の取得フラグ
+      // (i)詰みがある
+      // (ii)詰み手数３以上(1手で詰む場合は通常探索で高速に判定可能なため)
+      // (iii)余詰探索なし or 余詰探索あり かつ 弱防の変化(余詰探索では強防に対してSimulationを行わずすべての候補手を展開する必要があるため)
+      bool get_proof_tree = IsVLMProved(or_node_value) && GetVLMDepth(or_node_value) >= 3 &&
+        (!vlm_search.detect_dual_solution || (vlm_search.detect_dual_solution && GetVLMDepth(or_node_value) < child_vlm_search.remain_depth));
+
+      if(get_proof_tree){
         const auto is_generated = GetProofTree(&proof_tree);
         search_manager_.AddGetProofTreeResult(is_generated);
       }
@@ -322,17 +354,10 @@ inline const SearchManager& VLMAnalyzer::GetSearchManager() const
 }
 
 template<PlayerTurn P>
-const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
+const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree, const bool generate_full_tree)
 {
   assert(proof_tree != nullptr);
   
-  MoveList candidate_move;
-  VLMSearch vlm_search;
-  vlm_search.is_search = false;
-  vlm_search.remain_depth = 225;
-
-  GetCandidateMoveOR<P>(vlm_search, &candidate_move);
-
   const auto hash_value = CalcHashValue(board_move_sequence_);
   const bool is_black_turn = P == kBlackTurn;
   BitBoard child_bit_board = bit_board_;
@@ -357,6 +382,13 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
       return true;
     }
   }
+
+  MoveList candidate_move;
+  VLMSearch vlm_search;
+  vlm_search.is_search = false;
+  vlm_search.remain_depth = 225;
+
+  GetCandidateMoveOR<P>(vlm_search, &candidate_move);
 
   constexpr PositionState S = GetPlayerStone(P);
   constexpr PlayerTurn Q = GetOpponentTurn(P);
@@ -394,7 +426,7 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
     proof_tree->MoveChildNode(move);
     MakeMove(move);
 
-    const auto is_child_generated = GetProofTreeAND<Q>(proof_tree);
+    const auto is_child_generated = GetProofTreeAND<Q>(proof_tree, generate_full_tree);
 
     UndoMove();
     proof_tree->MoveParent();
@@ -406,7 +438,7 @@ const bool VLMAnalyzer::GetProofTreeOR(MoveTree * const proof_tree)
 }
 
 template<PlayerTurn P>
-const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
+const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree, const bool generate_full_tree)
 {
   assert(proof_tree != nullptr);
 
@@ -415,14 +447,38 @@ const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
   vlm_search.remain_depth = 225;
   
   MoveList candidate_move;
-  GetCandidateMoveAND<P>(vlm_search, &candidate_move);
+  const auto is_terminate_guard = GetCandidateMoveAND<P>(vlm_search, &candidate_move);
 
   constexpr PlayerTurn Q = GetOpponentTurn(P);
+
+  // 集約した証明木を生成する場合はPassした際の詰む手順を求める
+  MoveTree threat_proof_tree;
+
+  if(generate_full_tree == kGenerateSummarizedTree && !is_terminate_guard){
+    MakeMove(kNullMove);
+    GetProofTreeOR<Q>(&threat_proof_tree, kGenerateSummarizedTree);
+    UndoMove();
+  }
 
   // すべての候補手の詰みが登録されているかチェックする
   for(const auto move : candidate_move){
     // すべての候補手が登録済であることが期待されるのでBitBoardのみの更新ではなくMakeMove, Undoで更新する
     MakeMove(move);
+
+    // 集約した証明木を生成する場合はPassした時の詰む手順と同手順詰む手は記録しない
+    if(generate_full_tree == kGenerateSummarizedTree && move != kNullMove && !threat_proof_tree.empty()){
+      VLMSearch vlm_simulation;
+      vlm_simulation.is_search = false;
+      
+      const auto or_node_value = SimulationOR<Q>(vlm_simulation, kScanProofTree, &threat_proof_tree);
+      search_manager_.AddSimulationResult(IsVLMProved(or_node_value));
+
+      if(IsVLMProved(or_node_value)){
+        UndoMove();
+        continue;
+      }
+    }
+
     const auto child_hash_value = CalcHashValue(board_move_sequence_); // AND nodeはPassがあるため逐次計算する
 
     VLMSearchValue search_value;
@@ -433,7 +489,7 @@ const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
       proof_tree->AddChild(move);
       proof_tree->MoveChildNode(move);
 
-      is_child_generated = GetProofTreeOR<Q>(proof_tree);
+      is_child_generated = GetProofTreeOR<Q>(proof_tree, generate_full_tree);
   
       proof_tree->MoveParent();
     }
@@ -450,7 +506,7 @@ const bool VLMAnalyzer::GetProofTreeAND(MoveTree * const proof_tree)
 }
 
 template<PlayerTurn P>
-VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree * const proof_tree)
+VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, const bool check_vlm_table, MoveTree * const proof_tree)
 {
   assert(proof_tree != nullptr);
 
@@ -463,7 +519,7 @@ VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree *
   // 置換表をチェック
   const auto hash_value = CalcHashValue(board_move_sequence_);
   VLMSearchValue table_value = 0;
-  const bool is_registered = vlm_table_->find(hash_value, bit_board_, &table_value);
+  bool is_registered = check_vlm_table ? vlm_table_->find(hash_value, bit_board_, &table_value) : false;
 
   if(is_registered){
     if(IsVLMProved(table_value) || IsVLMDisproved(table_value)){
@@ -516,7 +572,7 @@ VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree *
     }
 
     MakeMove(move);
-    VLMSearchValue and_node_value = SimulationAND<Q>(child_vlm_search, proof_tree);
+    VLMSearchValue and_node_value = SimulationAND<Q>(child_vlm_search, check_vlm_table, proof_tree);
     UndoMove();
     proof_tree->MoveParent();
 
@@ -538,7 +594,7 @@ VLMSearchValue VLMAnalyzer::SimulationOR(const VLMSearch &vlm_search, MoveTree *
 }
 
 template<PlayerTurn P>
-VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree * const proof_tree)
+VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, const bool check_vlm_table, MoveTree * const proof_tree)
 {
   assert(proof_tree != nullptr);
 
@@ -551,7 +607,7 @@ VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree 
   // 置換表をチェック
   const auto hash_value = CalcHashValue(board_move_sequence_);
   VLMSearchValue table_value = 0;
-  const bool is_registered = vlm_table_->find(hash_value, bit_board_, &table_value);
+  const bool is_registered = check_vlm_table ? vlm_table_->find(hash_value, bit_board_, &table_value) : false;
 
   if(is_registered){
     if(IsVLMProved(table_value) || IsVLMDisproved(table_value)){
@@ -579,7 +635,16 @@ VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree 
 
   // 候補手生成
   MoveList candidate_move;
-  GetCandidateMoveAND<P>(vlm_search, &candidate_move);
+  const bool is_terminate_guard = GetCandidateMoveAND<P>(vlm_search, &candidate_move);
+
+  if(vlm_search.remain_depth == 2 && !is_terminate_guard){
+    // 残り深さ２で相手に１手勝ちがない -> Passすると弱意の不詰になる
+    static constexpr VLMSearchDepth depth = 2;
+    constexpr VLMSearchValue search_value = GetVLMWeakDisprovedSearchValue(depth);
+
+    vlm_table_->Upsert(hash_value, bit_board_, search_value);
+    return search_value;
+  }
 
   // 候補手がすべて証明木に登録されているかチェックする
   MoveList proof_tree_move;
@@ -607,7 +672,7 @@ VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree 
   for(const auto move : candidate_move){
     proof_tree->MoveChildNode(move);
     MakeMove(move);
-    VLMSearchValue or_node_value = SimulationOR<Q>(child_vlm_search, proof_tree);
+    VLMSearchValue or_node_value = SimulationOR<Q>(child_vlm_search, check_vlm_table, proof_tree);
     UndoMove();
     proof_tree->MoveParent();
 
@@ -628,6 +693,219 @@ VLMSearchValue VLMAnalyzer::SimulationAND(const VLMSearch &vlm_search, MoveTree 
   return search_value;
 }
 
+template<PlayerTurn P>
+const bool VLMAnalyzer::DetectDualSolutionOR(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree)
+{
+  assert(best_response != nullptr);
+  assert(dual_solution_tree != nullptr);
+  assert(proof_tree != nullptr);
+
+  const auto hash_value = CalcHashValue(board_move_sequence_);
+  VLMSearchValue search_value;
+  
+  if(!vlm_table_->find(hash_value, bit_board_, &search_value) || !IsVLMProved(search_value))
+  {
+    return false;
+  }
+
+  const auto depth = GetVLMDepth(search_value);
+
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+  std::map<MovePosition, MoveTree> move_proof_tree;   // 詰む手と証明木のmap
+  bool detect_dual_solution = false;    // 余詰フラグ
+
+  // 証明木中の詰む手が複数ある場合に余詰になっていないかチェックする
+  MoveList proved_move_list;
+  proof_tree->GetChildMoveList(&proved_move_list);
+
+  if(depth == 1){
+    // 末端の達四を作る方向が２つある場合などは余詰とはみなされないので余詰チェックは行わない
+    assert(!proved_move_list.empty());
+    *best_response = proved_move_list[0];
+    return false;
+  }
+
+  for(const auto move : proved_move_list){
+    if(proved_move_list.size() >= 2){
+      UpdateDualSolution<P>(move, &move_proof_tree);
+    }
+
+    if(move_proof_tree.size() >= 2){
+      // 余詰
+      dual_solution_tree->MoveRootNode();
+      dual_solution_tree->AddChild(search_sequence_);
+      dual_solution_tree->MoveChildNode(search_sequence_);
+
+      for(const auto &move_tree : move_proof_tree){
+        dual_solution_tree->AddChild(move_tree.first);
+      }
+
+      detect_dual_solution = true;
+    }
+
+    MakeMove(move);
+    proof_tree->MoveChildNode(move);
+    MoveList child_best_response;
+
+    const auto child_detect_dual_solution = DetectDualSolutionAND<Q>(proof_tree, &child_best_response, dual_solution_tree);
+    
+    proof_tree->MoveParent();
+    UndoMove();
+
+    *best_response = move;
+    *best_response += child_best_response;
+
+    detect_dual_solution |= child_detect_dual_solution;
+  }
+
+  return detect_dual_solution;
+}
+
+template<PlayerTurn P>
+void VLMAnalyzer::UpdateDualSolution(const MovePosition move, std::map<MovePosition, MoveTree> * const move_proof_tree)
+{
+  assert(move_proof_tree != nullptr);
+
+  if(!move_proof_tree->empty()){
+    // 盤面の対称性チェック
+    std::vector<BoardSymmetry> board_symmetry_list;
+
+    for(const auto symmetry : GetBoardSymmetry()){
+      if(symmetry == kIdenticalSymmetry){
+        continue;
+      }
+
+      if(IsBoardSymmetric(symmetry)){
+        board_symmetry_list.emplace_back(symmetry);
+      }
+    }
+
+    // 盤面が対称形の場合、対称な位置の詰む手は余詰とみなさない
+    for(const auto symmetric : board_symmetry_list){
+      const auto symmetric_move = GetSymmetricMove(move, symmetric);
+      
+      if(move_proof_tree->find(symmetric_move) != move_proof_tree->end()){
+        return;
+      }
+    }
+  }
+
+  // moveの証明木を取得する
+  assert(move_proof_tree->find(move) == move_proof_tree->end());
+  MoveTree proof_tree;
+
+  proof_tree.AddChild(move);
+  proof_tree.MoveChildNode(move);
+
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+
+  MakeMove(move);
+  const bool generate_proof_tree = GetProofTreeAND<Q>(&proof_tree, kGenerateSummarizedTree);
+  UndoMove();
+
+  if(!generate_proof_tree){
+    assert(!generate_proof_tree);
+    return;
+  }
+
+  // 手順前後(終端局面1手前の局面集合が同一)のチェック
+  if(!move_proof_tree->empty()){
+    std::set<HashValue> check_hash_set;      // 終端局面1手前の局面のHash値
+    GetPreTerminateHash(&proof_tree, &check_hash_set);
+    bool synonymous_solution = false;
+
+    for(auto &move_tree : *move_proof_tree){
+      std::set<HashValue> registered_hash_set;
+      auto &registered_proof_tree = move_tree.second;
+      GetPreTerminateHash(&registered_proof_tree, &registered_hash_set);
+
+      if(check_hash_set == registered_hash_set){
+        synonymous_solution = true;
+        break;
+      }
+    }
+
+    if(synonymous_solution){
+      return;
+    }
+  }
+
+  move_proof_tree->insert(std::make_pair(move, proof_tree));
+}
+
+template<PlayerTurn P>
+const bool VLMAnalyzer::DetectDualSolutionAND(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree)
+{
+  assert(dual_solution_tree != nullptr);
+  assert(proof_tree != nullptr);
+
+  VLMSearch vlm_search;
+  vlm_search.is_search = false;
+  vlm_search.remain_depth = 225;
+  
+  MoveList candidate_move;
+  GetCandidateMoveAND<P>(vlm_search, &candidate_move);
+
+  const auto hash_value = CalcHashValue(board_move_sequence_);
+  VLMSearchValue search_value;
+  
+  if(!vlm_table_->find(hash_value, bit_board_, &search_value) || !IsVLMProved(search_value))
+  {
+    return false;
+  }
+
+  const auto depth = GetVLMDepth(search_value);
+  constexpr PlayerTurn Q = GetOpponentTurn(P);
+  bool single_solution = false;     // 余詰のない最強防が存在するかのフラグ
+
+  // 最強防の余詰判定により余詰木の更新要否が変わるためコピーを作って更新する
+  MoveTree updated_dual_solution_tree = *dual_solution_tree;
+
+  // すべての候補手の詰みが登録されているかチェックする
+  for(const auto move : candidate_move){
+    // すべての候補手が登録済であることが期待されるのでBitBoardのみの更新ではなくMakeMove, Undoで更新する
+    MakeMove(move);
+
+    const auto child_hash_value = CalcHashValue(board_move_sequence_); // AND nodeはPassがあるため逐次計算する
+
+    VLMSearchValue child_search_value;
+    const auto is_find = vlm_table_->find(child_hash_value, bit_board_, &child_search_value);
+    const auto child_depth = GetVLMDepth(child_search_value);
+
+    // 最強防のみチェックする
+    const bool is_strongest = IsVLMProved(child_search_value) && child_depth + 1 == depth;
+    const bool is_check = is_find && is_strongest;
+    bool child_detect_dual_solution = is_check;
+
+    if(is_check){
+      proof_tree->MoveChildNode(move);
+      MoveList child_best_response;
+
+      child_detect_dual_solution = DetectDualSolutionOR<Q>(proof_tree, &child_best_response, &updated_dual_solution_tree);
+      
+      proof_tree->MoveParent();
+
+      *best_response = move;
+      *best_response += child_best_response;
+    }
+
+    UndoMove();
+
+    if(is_strongest && !child_detect_dual_solution){
+      // 余詰のない最強防が見つかった -> 作意手順とみなし、他の手は変化別詰とみなす
+      single_solution = true;
+      break;
+    }
+  }
+
+  if(!single_solution){
+    // いずれの最強防にも余詰がある -> 余詰が生じている -> 余詰木を更新する
+    *dual_solution_tree = updated_dual_solution_tree;
+  }
+
+  return !single_solution;
+}
+
 inline const VLMSearchValue VLMAnalyzer::GetSearchValue(const VLMSearchValue child_search_value) const
 {
   if(IsVLMDisproved(child_search_value)){
@@ -635,6 +913,11 @@ inline const VLMSearchValue VLMAnalyzer::GetSearchValue(const VLMSearchValue chi
   }
 
   return child_search_value - 1;
+}
+
+inline const bool VLMAnalyzer::IsRootNode() const
+{
+  return search_sequence_.empty();
 }
 }   // namespace realcore
 

@@ -79,25 +79,29 @@ void ParallelVLMAnalyzer::VLMAnalyze(const size_t thread_id, const realcore::VLM
 
     const auto board_string = board_list[problem_id];
     MoveList board_sequence(board_string);
+    const auto &vlm_table = vlm_table_list_[thread_id];
 
     if(!IsNonTerminateNormalSequence(board_sequence)){
       boost::mutex::scoped_lock lock(mutex_cerr_);
       cerr << "The move sequence is not a non-terminal normal sequence. The result may not be accurate. : " << board_sequence.str() << endl;
 
 #ifndef NDEBUG
+      VLMAnalyzer vlm_analyzer(MoveList(), vlm_table);
+      VLMResult vlm_result;
+      Output(problem_id, vlm_analyzer, vlm_search, vlm_result);
+
       exist_problem = GetProblemIndex(&problem_id);
       continue;
 #endif
     }
 
-    const auto &vlm_table = vlm_table_list_[thread_id];
     vlm_table->Initialize();
 
     VLMAnalyzer vlm_analyzer(board_sequence, vlm_table);
     VLMResult vlm_result;
 
     vlm_analyzer.Solve(vlm_search, &vlm_result);
-    Output(problem_id, vlm_analyzer, vlm_result);
+    Output(problem_id, vlm_analyzer, vlm_search, vlm_result);
 
     exist_problem = GetProblemIndex(&problem_id);
   }
@@ -110,15 +114,21 @@ void ParallelVLMAnalyzer::OutputHeader()
   cout << "Board,";
   cout << "Result,";
   cout << "FirstMove,";
+  cout << "BestResponse,";
   cout << "ProofTree,";
   cout << "SearchedDepth,";
+  cout << "DualSolution,";
+  cout << "GetProofTreeCount,";
+  cout << "GetProofTreeSuccessCount,";
+  cout << "SimulationCount,";
+  cout << "SimulationSuccessCount,";
   cout << "Time(sec),";
   cout << "Nodes,";
   cout << "NPS";
   cout << endl;
 }
 
-void ParallelVLMAnalyzer::Output(const size_t problem_id, const realcore::VLMAnalyzer &vlm_analyzer, const realcore::VLMResult &vlm_result) const
+void ParallelVLMAnalyzer::Output(const size_t problem_id, const realcore::VLMAnalyzer &vlm_analyzer, const realcore::VLMSearch &vlm_search, const realcore::VLMResult &vlm_result) const
 {
   const StringVector &id_list = problem_db_.at("ID");
   const StringVector &name_list = problem_db_.at("Name");
@@ -146,6 +156,13 @@ void ParallelVLMAnalyzer::Output(const size_t problem_id, const realcore::VLMAna
   const string first_move_str = vlm_result.solved ? MoveString(vlm_result.proof_tree.GetTopNodeMove()) : "";
   ss << first_move_str << ",";
 
+  // BestResponse
+  if(vlm_search.detect_dual_solution){
+    ss << vlm_result.best_response.str() << ",";
+  }else{
+    ss << "Unknown,";
+  }
+
   // ProofTree
   const string proof_tree_str = vlm_result.solved ? vlm_result.proof_tree.str() : "";
   ss << proof_tree_str << ",";
@@ -153,7 +170,32 @@ void ParallelVLMAnalyzer::Output(const size_t problem_id, const realcore::VLMAna
   // SearchedDepth
   ss << vlm_result.search_depth << ",";
   
+  // DualSolution
+  if(vlm_search.detect_dual_solution){
+    if(vlm_result.detect_dual_solution){
+      ss << vlm_result.dual_solution_tree.str() << ",";
+    }else{
+      ss << "-,";
+    }
+  }else{
+    ss << "Unknown,";
+  }
+
   const auto& search_manager = vlm_analyzer.GetSearchManager();
+
+  // GetProofTree
+  const auto proof_tree_count = search_manager.GetProofTreeCount();
+  const auto proof_tree_success_count = search_manager.GetProofTreeSuccessCount();
+
+  ss << proof_tree_count << ",";
+  ss << proof_tree_success_count << ",";
+  
+  // Simulation
+  const auto simulation_count = search_manager.GetSimulationCount();
+  const auto simulation_success_count = search_manager.GetSimulationSuccessCount();
+
+  ss << simulation_count << ",";
+  ss << simulation_success_count << ",";
 
   // Time(sec)
   const auto search_time = search_manager.GetSearchTime() / 1000.0;
