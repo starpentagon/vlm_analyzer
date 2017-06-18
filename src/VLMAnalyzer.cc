@@ -56,7 +56,7 @@ void VLMAnalyzer::Solve(const VLMSearch &vlm_search, VLMResult * const vlm_resul
     MoveTree full_proof_tree;
     GetProofTree(&full_proof_tree);
 
-    vlm_result->detect_dual_solution = DetectDualSolution(&full_proof_tree, &vlm_result->dual_solution_tree);
+    vlm_result->detect_dual_solution = DetectDualSolution(&full_proof_tree, &vlm_result->best_response, &vlm_result->dual_solution_tree);
   }
 }
 
@@ -325,7 +325,7 @@ const bool VLMAnalyzer::GetSummarizedProofTree(MoveTree * const proof_tree)
   return is_generated;
 }
 
-const bool VLMAnalyzer::DetectDualSolution(MoveTree * const proof_tree, MoveTree * const dual_solution_tree)
+const bool VLMAnalyzer::DetectDualSolution(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree)
 {
   assert(dual_solution_tree != nullptr);
   assert(dual_solution_tree->empty());
@@ -338,9 +338,9 @@ const bool VLMAnalyzer::DetectDualSolution(MoveTree * const proof_tree, MoveTree
   bool detect_dual_solution = false;
 
   if(is_black_turn){
-    detect_dual_solution = DetectDualSolutionOR<kBlackTurn>(proof_tree, dual_solution_tree);
+    detect_dual_solution = DetectDualSolutionOR<kBlackTurn>(proof_tree, best_response, dual_solution_tree);
   }else{
-    detect_dual_solution = DetectDualSolutionOR<kWhiteTurn>(proof_tree, dual_solution_tree);
+    detect_dual_solution = DetectDualSolutionOR<kWhiteTurn>(proof_tree, best_response, dual_solution_tree);
   }
 
   if(!detect_dual_solution){

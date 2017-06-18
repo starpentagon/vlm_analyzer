@@ -71,6 +71,7 @@ typedef struct structVLMResult
   VLMSearchDepth search_depth;     // 探索済の深さ
   bool detect_dual_solution;       // 余詰の有無
   MoveTree dual_solution_tree;     // 余詰の変化
+  MoveList best_response;          // 最善応手
 }VLMResult;
 
 // 前方宣言
@@ -112,18 +113,19 @@ public:
 private:
   //! @brief 余詰判定を行う
   //! @param proof_tree 証明木
+  //! @param best_response 最善応手
   //! @param dual_solution_tree 余詰解
   //! @retval true 余詰が存在する
   //! @note 証明木はすべての変化を生成してあること(kGenerateFullTreeであること)
-  const bool DetectDualSolution(MoveTree * const proof_tree, MoveTree * const dual_solution_tree);
+  const bool DetectDualSolution(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree);
 
   //! @brief 余詰判定(OR node)
   template<PlayerTurn P>
-  const bool DetectDualSolutionOR(MoveTree * const proof_tree, MoveTree * const dual_solution_tree);
+  const bool DetectDualSolutionOR(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree);
   
   //! @brief 余詰判定(AND node)
   template<PlayerTurn P>
-  const bool DetectDualSolutionAND(MoveTree * const proof_tree, MoveTree * const dual_solution_tree);
+  const bool DetectDualSolutionAND(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree);
 
   //! @brief 余詰となる手を管理する
   //! @param move 詰む手
@@ -133,23 +135,6 @@ private:
 
   //! @brief 手順前後を検知するために終端局面直前の局面までのOR node手順のHash値を求める
   void GetPreTerminateHash(MoveTree * const proof_tree, std::set<HashValue> * const pre_terminate_hash_set) const;
-
-  //! @brief 余詰探索で手順前後のVCFを検知するため指定の指し手以下VCFがあるか判定する
-  //! @param move 指定の指し手
-  //! @param vcf_sequence VCF手順の格納先
-  //! @retval true move以下VCFが存在
-  //! @note 余詰探索ではVCFの手順前後を見るためVCF手数が1手の場合はfalseを返す
-  //! @note P moveの手番
-  template<PlayerTurn P>
-  const bool GetVCFSequence(const MovePosition move, MoveList * const vcf_sequence);
-
-  //! @brief 余詰探索で手順前後のVCFを検知するため証明木がVCFかどうかを判定する
-  //! @param proof_tree 証明木
-  //! @param vcf_sequence VCF手順の格納先
-  //! @retval true 証明木内にVCFが存在
-  //! @note P 証明木のRoot nodeの手番
-  template<PlayerTurn P>
-  const bool IsProofTreeVCF(MoveTree * const proof_tree, MoveList * const vcf_sequence);
 
   //! @brief OR nodeの探索
   template<PlayerTurn P>

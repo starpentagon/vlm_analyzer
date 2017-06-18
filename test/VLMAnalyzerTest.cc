@@ -211,7 +211,7 @@ public:
       VLMSearch vlm_simulation;
       vlm_simulation.is_search = false;
 
-      const auto or_node_value = vlm_analyzer.SimulationOR<kBlackTurn>(vlm_simulation, &proof_tree);
+      const auto or_node_value = vlm_analyzer.SimulationOR<kBlackTurn>(vlm_simulation, VLMAnalyzer::kScanProofTree, &proof_tree);
       ASSERT_TRUE(IsVLMProved(or_node_value));
     }
     
@@ -225,7 +225,7 @@ public:
       VLMSearch vlm_simulation;
       vlm_simulation.is_search = false;
 
-      const auto or_node_value = vlm_analyzer.SimulationOR<kBlackTurn>(vlm_simulation, &proof_tree);
+      const auto or_node_value = vlm_analyzer.SimulationOR<kBlackTurn>(vlm_simulation, VLMAnalyzer::kScanProofTree, &proof_tree);
       ASSERT_TRUE(!IsVLMProved(or_node_value));
     }
     {
@@ -250,7 +250,7 @@ public:
       VLMSearch vlm_simulation;
       vlm_simulation.is_search = false;
 
-      const auto or_node_value = vlm_analyzer.SimulationOR<kBlackTurn>(vlm_simulation, &proof_tree);
+      const auto or_node_value = vlm_analyzer.SimulationOR<kBlackTurn>(vlm_simulation, VLMAnalyzer::kScanProofTree, &proof_tree);
       ASSERT_TRUE(IsVLMProved(or_node_value));
       
       vlm_analyzer.UndoMove();
