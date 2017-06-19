@@ -26,11 +26,12 @@ Some shell scripts and CMake require the following environment variables:
 
 ## How to build
 You can build VLM analyzer as follows:
+
 * Pull REAL Core library at the vlm_analyzer directory
 ```shell-session
 $ git clone https://github.com/starpentagon/realcore.git
 ```
-* Install packages if you haven't install CMake and boost.
+* Install packages if you haven't installed CMake and boost yet.
 ```shell-session
 $ sudo apt install cmake
 $ sudo apt install libboost-all-dev
@@ -45,3 +46,5 @@ Now you can run VLM analyzer
 ```shell-session
 $ ./build/vlm_analyzer
 ```
+
+Also I posted my blog(http://quinstella.net/vlm-analyzer-install-ubuntu/), please find it if you can read Japanese.
