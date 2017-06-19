@@ -19,7 +19,7 @@ int main(int argc, char* argv[])
   option.add_options()
     ("string,s", value<string>(), "開始局面: [a-o]形式のテキスト")
     ("pos", value<string>(), "POS形式ファイル名")
-    ("depth,d", value<VLMSearchDepth>()->default_value(7), "探索深さ(default: 7)")
+    ("depth,d", value<VLMSearchDepth>()->default_value(7), "探索深さ(四手五連:5, 五手五連:7)")
     ("dual", "余詰/最善応手を探索する")
     ("help,h", "ヘルプを表示");
   
