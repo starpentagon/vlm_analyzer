@@ -4,12 +4,14 @@
 #include <boost/program_options.hpp>
 
 #include "VLMAnalyzer.h"
+#include "SGFParser.h"
 
 using namespace std;
 using namespace boost::program_options;
 using namespace realcore;
 
-string VLMResultString(const VLMAnalyzer &vlm_analyzer, const VLMSearch &vlm_search, const VLMResult &vlm_result);
+string VLMResultString(const variables_map &arg_map, const MoveList &board_move_list, const VLMAnalyzer &vlm_analyzer, const VLMSearch &vlm_search, const VLMResult &vlm_result);
+string GetTreeSGFText(const variables_map &arg_map, const MoveList &board_move_list, const MoveTree &tree);
 
 int main(int argc, char* argv[])
 {
@@ -18,15 +20,18 @@ int main(int argc, char* argv[])
 
   option.add_options()
     ("string,s", value<string>(), "開始局面: [a-o]形式のテキスト")
+    ("sgf-input", value<string>(), "開始局面: SGF形式のテキスト")
     ("pos", value<string>(), "POS形式ファイル名")
     ("depth,d", value<VLMSearchDepth>()->default_value(7), "探索深さ(四手五連:5, 五手五連:7)")
     ("dual", "余詰/最善応手を探索する")
+    ("sgf-output", "探索結果をSGF結果で出力する")
     ("help,h", "ヘルプを表示");
   
   variables_map arg_map;
   store(parse_command_line(argc, argv, option), arg_map);
 
-  bool is_help = arg_map.count("help") || (!arg_map.count("string") && !arg_map.count("pos")) || (arg_map.count("string") && arg_map.count("pos"));
+  size_t input_count = (arg_map.count("string") ? 1 : 0) + (arg_map.count("pos") ? 1 : 0) + (arg_map.count("sgf-input") ? 1 : 0);
+  bool is_help = arg_map.count("help") || input_count != 1;
 
   if(is_help){
     cout << "Usage: " << argv[0] << " [options]" << endl;
@@ -40,6 +45,9 @@ int main(int argc, char* argv[])
   if(arg_map.count("string")){
     const auto board_string = arg_map["string"].as<string>();
     board_sequence = MoveList(board_string);
+  }else if(arg_map.count("sgf-input")){
+    const auto sgf_data = arg_map["sgf-input"].as<string>();
+    GetMoveListFromSGFData(kSGFCheckNone, sgf_data, &board_sequence);
   }else{
     const auto pos_file = arg_map["pos"].as<string>();
     ReadPOSFile(pos_file, &board_sequence);
@@ -63,12 +71,12 @@ int main(int argc, char* argv[])
 
   vlm_analyzer.Solve(vlm_search, &vlm_result);
 
-  cout << VLMResultString(vlm_analyzer, vlm_search, vlm_result);
+  cout << VLMResultString(arg_map, board_sequence, vlm_analyzer, vlm_search, vlm_result);
 
   return 0;
 }
 
-string VLMResultString(const VLMAnalyzer &vlm_analyzer, const VLMSearch &vlm_search, const VLMResult &vlm_result)
+string VLMResultString(const variables_map &arg_map, const MoveList &board_move_list, const VLMAnalyzer &vlm_analyzer, const VLMSearch &vlm_search, const VLMResult &vlm_result)
 {
   stringstream ss;
   
@@ -86,11 +94,23 @@ string VLMResultString(const VLMAnalyzer &vlm_analyzer, const VLMSearch &vlm_sea
         ss << "Best response: Unknown" << endl;
     }
     
-    ss << "Proof Tree: " << vlm_result.proof_tree.str() << endl;
+    const bool is_sgf = arg_map.count("sgf-output");
+
+    if(is_sgf){
+      ss << "Proof Tree: " << endl;
+      ss << "\t" << GetTreeSGFText(arg_map, board_move_list, vlm_result.proof_tree) << endl;
+    }else{
+      ss << "Proof Tree: " << vlm_result.proof_tree.str() << endl;
+    }
 
     if(vlm_search.detect_dual_solution){
       if(vlm_result.detect_dual_solution){
-        ss << "Dual Solution: " << vlm_result.dual_solution_tree.str();
+        if(is_sgf){
+          ss << "Dual Solution: " << endl;
+          ss << "\t" << GetTreeSGFText(arg_map, board_move_list, vlm_result.dual_solution_tree) << endl;
+        }else{
+          ss << "Dual Solution: " << vlm_result.dual_solution_tree.str();
+        }
       }else{
         ss << "Dual Solution: -";
       }
@@ -139,5 +159,18 @@ string VLMResultString(const VLMAnalyzer &vlm_analyzer, const VLMSearch &vlm_sea
     ss << "NPS: INF" << endl;
   }
 
+  return ss.str();
+}
+
+string GetTreeSGFText(const variables_map &arg_map, const MoveList &board_move_list, const MoveTree &tree)
+{
+  stringstream ss;
+
+  ss << "(;GM[4]FF[4]SZ[15]";
+  ss << board_move_list.GetSGFPositionText();
+  ss << (board_move_list.IsBlackTurn() ? "PL[B]" : "PL[W]");
+  ss << tree.GetSGFLabeledText(board_move_list.IsBlackTurn());
+  ss << ")";
+  
   return ss.str();
 }
