@@ -49,7 +49,14 @@ void VLMAnalyzer::Solve(const VLMSearch &vlm_search, VLMResult * const vlm_resul
   }
 
   if(vlm_result->solved){
-    GetProofTree(&vlm_result->proof_tree);
+    GetSummarizedProofTree(&vlm_result->proof_tree);
+  }
+
+  if(vlm_result->solved && vlm_search.detect_dual_solution && vlm_result->search_depth >= 3){
+    MoveTree full_proof_tree;
+    GetProofTree(&full_proof_tree);
+
+    vlm_result->detect_dual_solution = DetectDualSolution(&full_proof_tree, &vlm_result->best_response, &vlm_result->dual_solution_tree);
   }
 }
 
@@ -277,15 +284,16 @@ void VLMAnalyzer::MoveOrderingOR<kWhiteTurn>(const VLMSearch &vlm_search, MoveBi
 const bool VLMAnalyzer::GetProofTree(MoveTree * const proof_tree)
 {
   assert(proof_tree != nullptr);
-  assert(proof_tree->empty());
+
+  proof_tree->MoveRootNode();
 
   const bool is_black_turn = board_move_sequence_.IsBlackTurn();
   bool is_generated = false;
 
   if(is_black_turn){
-    is_generated = GetProofTreeOR<kBlackTurn>(proof_tree);
+    is_generated = GetProofTreeOR<kBlackTurn>(proof_tree, kGenerateFullTree);
   }else{
-    is_generated = GetProofTreeOR<kWhiteTurn>(proof_tree);
+    is_generated = GetProofTreeOR<kWhiteTurn>(proof_tree, kGenerateFullTree);
   }
 
   if(!is_generated){
@@ -293,6 +301,84 @@ const bool VLMAnalyzer::GetProofTree(MoveTree * const proof_tree)
   }
 
   return is_generated;
+}
+
+const bool VLMAnalyzer::GetSummarizedProofTree(MoveTree * const proof_tree)
+{
+  assert(proof_tree != nullptr);
+
+  proof_tree->MoveRootNode();
+
+  const bool is_black_turn = board_move_sequence_.IsBlackTurn();
+  bool is_generated = false;
+
+  if(is_black_turn){
+    is_generated = GetProofTreeOR<kBlackTurn>(proof_tree, kGenerateSummarizedTree);
+  }else{
+    is_generated = GetProofTreeOR<kWhiteTurn>(proof_tree, kGenerateSummarizedTree);
+  }
+
+  if(!is_generated){
+    proof_tree->clear();
+  }
+
+  return is_generated;
+}
+
+const bool VLMAnalyzer::DetectDualSolution(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree)
+{
+  assert(dual_solution_tree != nullptr);
+  assert(dual_solution_tree->empty());
+  assert(proof_tree != nullptr);
+  assert(proof_tree->IsRootNode());
+
+  dual_solution_tree->MoveRootNode();
+
+  const bool is_black_turn = board_move_sequence_.IsBlackTurn();
+  bool detect_dual_solution = false;
+
+  if(is_black_turn){
+    detect_dual_solution = DetectDualSolutionOR<kBlackTurn>(proof_tree, best_response, dual_solution_tree);
+  }else{
+    detect_dual_solution = DetectDualSolutionOR<kWhiteTurn>(proof_tree, best_response, dual_solution_tree);
+  }
+
+  if(!detect_dual_solution){
+    dual_solution_tree->clear();
+  }
+
+  proof_tree->MoveRootNode();
+
+  return detect_dual_solution;
+}
+
+void VLMAnalyzer::GetPreTerminateHash(MoveTree * const proof_tree, std::set<HashValue> * const pre_terminate_hash_set) const
+{
+  assert(proof_tree != nullptr);
+  assert(pre_terminate_hash_set != nullptr);
+  assert(pre_terminate_hash_set->empty());
+
+  std::vector<MoveNodeIndex> leaf_index_list;
+
+  proof_tree->GetLeafNodeList(&leaf_index_list);
+  const bool is_black_turn = board_move_sequence_.IsBlackTurn();
+
+  for(const auto leaf_index : leaf_index_list){
+    proof_tree->MoveNode(leaf_index);
+    proof_tree->MoveParent();
+
+    MoveList move_list;
+    proof_tree->GetMoveList(&move_list);
+
+    HashValue hash_value = 0;
+
+    // OR nodeのHash値を求める
+    for(size_t i=0, size=move_list.size(); i<size; i+=2){
+      hash_value = CalcHashValue(is_black_turn, move_list[i], hash_value);
+    }
+
+    pre_terminate_hash_set->insert(hash_value);
+  }
 }
 
 const std::string VLMAnalyzer::GetSettingInfo() const

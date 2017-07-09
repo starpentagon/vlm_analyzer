@@ -1,5 +1,5 @@
 #!/bin/bash
-compiler=clang++
+compiler=g++
 
 if [ ! -d build ]; then
 	mkdir build

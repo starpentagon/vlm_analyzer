@@ -61,7 +61,7 @@ typedef struct sturctVLMSearch
 typedef struct structVLMResult
 {
   structVLMResult()
-  : solved(false), disproved(false), search_depth(0)
+  : solved(false), disproved(false), search_depth(0), detect_dual_solution(false)
   {
   }
 
@@ -69,6 +69,9 @@ typedef struct structVLMResult
   bool disproved;       // 反証できたかどうか
   MoveTree proof_tree;  // 解図できた時の証明木
   VLMSearchDepth search_depth;     // 探索済の深さ
+  bool detect_dual_solution;       // 余詰の有無
+  MoveTree dual_solution_tree;     // 余詰の変化
+  MoveList best_response;          // 最善応手
 }VLMResult;
 
 // 前方宣言
@@ -97,6 +100,10 @@ public:
   //! @brief 現局面をroot nodeとする証明木を取得する
   const bool GetProofTree(MoveTree * const proof_tree);
 
+  //! @brief 現局面をroot nodeとする集約した証明木を取得する
+  //! @note AND nodeでPassして詰む手順と同一手順で詰む手はPassに集約する
+  const bool GetSummarizedProofTree(MoveTree * const proof_tree);
+
   //! @brief 探索制御オブジェクトを返す
   const SearchManager& GetSearchManager() const;
 
@@ -104,7 +111,31 @@ public:
   const std::string GetSettingInfo() const;
 
 private:
+  //! @brief 余詰判定を行う
+  //! @param proof_tree 証明木
+  //! @param best_response 最善応手
+  //! @param dual_solution_tree 余詰解
+  //! @retval true 余詰が存在する
+  //! @note 証明木はすべての変化を生成してあること(kGenerateFullTreeであること)
+  const bool DetectDualSolution(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree);
+
+  //! @brief 余詰判定(OR node)
+  template<PlayerTurn P>
+  const bool DetectDualSolutionOR(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree);
   
+  //! @brief 余詰判定(AND node)
+  template<PlayerTurn P>
+  const bool DetectDualSolutionAND(MoveTree * const proof_tree, MoveList * const best_response, MoveTree * const dual_solution_tree);
+
+  //! @brief 余詰となる手を管理する
+  //! @param move 詰む手
+  //! @param move_proof_tree 詰む手 -> 証明木のmap
+  template<PlayerTurn P>
+  void UpdateDualSolution(const MovePosition move, std::map<MovePosition, MoveTree> * const move_proof_tree);
+
+  //! @brief 手順前後を検知するために終端局面直前の局面までのOR node手順のHash値を求める
+  void GetPreTerminateHash(MoveTree * const proof_tree, std::set<HashValue> * const pre_terminate_hash_set) const;
+
   //! @brief OR nodeの探索
   template<PlayerTurn P>
   VLMSearchValue SolveOR(const VLMSearch &vlm_search, VLMResult * const vlm_result);
@@ -138,27 +169,45 @@ private:
   template<PlayerTurn P>
   void MoveOrderingAND(MoveBitSet * const candidate_move_bit, MoveList * const candidate_move) const;
 
+  //! @brief 証明木の生成モード
+  static constexpr bool kGenerateFullTree = true;         // すべての変化を生成する
+  static constexpr bool kGenerateSummarizedTree = false;  // Passして詰む手順と同一手順で詰む変化はPassに集約する
+
   //! @brief 証明木の取得(OR node)
+  //! @param generate_full_tree 証明木の生成モード
   template<PlayerTurn P>
-  const bool GetProofTreeOR(MoveTree * const proof_tree);
+  const bool GetProofTreeOR(MoveTree * const proof_tree, const bool generate_full_tree);
 
   //! @brief 証明木の取得(AND node)
+  //! @param generate_full_tree 証明木の生成モード
   template<PlayerTurn P>
-  const bool GetProofTreeAND(MoveTree * const proof_tree);
+  const bool GetProofTreeAND(MoveTree * const proof_tree, const bool generate_full_tree);
+
+  static constexpr bool kCheckVLMTable = true;    // Transposition tableのチェックを行う
+  static constexpr bool kScanProofTree = false;   // Transposition tableのチェックを行わず証明木の走査のみ行う
 
   //! @brief 証明木によるSimulation(OR node)
+  //! @param vlm_search 探索設定
+  //! @param check_vlm_table Simulation中にTransposition tableをチェックするか
+  //! @param proof_tree 証明木
   template<PlayerTurn P>
-  VLMSearchValue SimulationOR(const VLMSearch &vlm_search, MoveTree * const proof_tree);
+  VLMSearchValue SimulationOR(const VLMSearch &vlm_search, const bool check_vlm_table, MoveTree * const proof_tree);
 
   //! @brief 証明木によるSimulation(AND node)
+  //! @param vlm_search 探索設定
+  //! @param check_vlm_table Simulation中にTransposition tableをチェックするか
+  //! @param proof_tree 証明木
   template<PlayerTurn P>
-  VLMSearchValue SimulationAND(const VLMSearch &vlm_search, MoveTree * const proof_tree);
+  VLMSearchValue SimulationAND(const VLMSearch &vlm_search, const bool check_vlm_table, MoveTree * const proof_tree);
 
   //! @brief 終端チェック(OR node)
   const bool IsTerminate(VLMResult * const vlm_result);
 
   //! @brief 子局面の探索結果値から現局面の探索結果値を算出する
   const VLMSearchValue GetSearchValue(const VLMSearchValue child_search_value) const;
+
+  //! @brief root nodeかどうかを返す
+  const bool IsRootNode() const;
 
   SearchManager search_manager_;    //!< 探索制御
   MoveList search_sequence_;        //!< 探索手順
