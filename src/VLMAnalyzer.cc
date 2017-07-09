@@ -49,7 +49,7 @@ void VLMAnalyzer::Solve(const VLMSearch &vlm_search, VLMResult * const vlm_resul
   }
 
   if(vlm_result->solved){
-    GetSummarizedProofTree(&vlm_result->proof_tree);
+    GetProofTree(&vlm_result->proof_tree);
   }
 
   if(vlm_result->solved && vlm_search.detect_dual_solution && vlm_result->search_depth >= 3){

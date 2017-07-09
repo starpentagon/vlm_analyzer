@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
     ("pos", value<string>(), "POS形式ファイル名")
     ("depth,d", value<VLMSearchDepth>()->default_value(7), "探索深さ(四手五連:5, 五手五連:7)")
     ("dual", "余詰/最善応手を探索する")
-    ("sgf-output", "探索結果をSGF結果で出力する")
+    ("sgf-output", "探索結果をSGF形式で出力する")
     ("help,h", "ヘルプを表示");
   
   variables_map arg_map;
