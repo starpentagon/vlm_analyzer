@@ -9,7 +9,7 @@ if __name__ == "__main__":
     argc = len(argvs)
 
     if(argc != 2):
-        print 'Usage %s (result csv file)' % argvs[0]
+        print('Usage %s (result csv file)' % argvs[0])
         quit()
 
     # data load
@@ -63,8 +63,8 @@ if __name__ == "__main__":
 
     table.add_row(['Total', "{:,.0f}".format(problem_count), 100.0])
 
-    print table.draw()
-    print
+    print(table.draw())
+    print()
 
     # 解図時間, ノード数, NPS
     col_list = ['Time(sec)', 'Nodes', 'NPS']
@@ -77,7 +77,7 @@ if __name__ == "__main__":
         while "INF" in csv_dict[col]:
             csv_dict[col].remove("INF")
 
-        result_data = map(float, csv_dict[col])
+        result_data = list(map(float, csv_dict[col]))
         result_mean[col] = sum(result_data) / len(result_data)
         result_max[col] = max(result_data)
         result_min[col] = min(result_data)
@@ -103,4 +103,4 @@ if __name__ == "__main__":
                 "{:,.0f}".format(result_min[col])
             ])
 
-    print table.draw()
+    print(table.draw())
