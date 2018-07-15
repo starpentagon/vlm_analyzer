@@ -14,7 +14,7 @@ if __name__ == "__main__":
 
     # data load
     result_filename = argvs[1]
-    result_file = open(result_filename, 'rb')
+    result_file = open(result_filename, 'r')
     csv.field_size_limit(1000000)
     csv_file = csv.reader(result_file)
 
